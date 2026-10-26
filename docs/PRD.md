@@ -37,7 +37,7 @@ The film is the product. The graph and the listening layer ("Shema") are the eng
 | Muse Voice Transcribe | `muse-voice-transcribe-1.0` | Hebrew + English ASR, diarization, turn timestamps, realtime WebSocket |
 | SAM 3.1 | `sam-3.1` | Person masks: identity crops, subject-tracking 9:16 reframing, depth/bokeh |
 | Muse Image | `muse-image-1.0` | Title cards, posters, chapter cards (always labelled "generated") |
-| Muse Spark Open | `meta-models/muse-spark-open` (Baseten) | Bulk perception on credits; open-weights requirement |
+| Muse Spark Open | `meta-models/muse-spark-open-1026` (Baseten, hackathon ID) | Bulk perception on credits; targets the open-weights bonus prize |
 | Meta open weights (MusicGen, MMS-TTS) | local / Modal GPU | Original music per film, narration — **pending rules check** |
 | Muse Code | — | Used for part of the development; noted in README |
 
@@ -206,9 +206,28 @@ Hand-labelled set (40 photos, 5 conversations/blessings, 3 briefs):
 - Time and $ per film; tokens per stage
 Results go in the README and the demo video.
 
-## 10. Risks & open questions
-- **Rules** (ask on Discord): non-Muse Meta open-weights (MusicGen, MMS-TTS) allowed?
-  Required open-source licence? Is an idea built before OK if all code is new?
+## 10. Official rules and judging (participant guide, read 2026-10-26)
+- Problem statement: **Build for Your World**. Repo must be public; max team 4.
+- Demo may only show what was built during the hackathon, and must make that clear
+  (README section "Built during the hackathon" + commit history from 2026-10-26).
+- Anti-projects include basic RAG, simple image analyzers and **personality analyzers**:
+  Shema must not score people's personality, positivity or vocabulary. It extracts
+  moments, quotes, topics and events for films and the graph only. No medical advice.
+- Only use code, data, music and media we have rights to.
+- Stage 2 rubric, equal weight 0–10: **Impact, Use of Meta AI Tooling, Technical Depth &
+  Execution, Demo**. Submission = public repo + 3-minute video + live product.
+- Bonus prizes we target: Best Build on Meta Open Weight Models ($10K, Muse Spark Open on
+  Baseten), Best Agentic Use-Case ($5K, the film crew), Best Creative Build ($5K, Muse
+  Image/Wonder), Most Viral on X ($20K, post a film), Community Vote ($10K).
+- Credits: Meta $150 (claim link "coming soon", needs a card on the account, set a spend
+  limit), Baseten $100 + 2M TPM (form, reviewed by use case), Modal $100 (first 1,000),
+  Fireworks $25 (shortlist).
+- Workshops (ET): Oct 27 Agents 101, Oct 28 Verifiable Agents, Oct 30 Fireworks; Discord
+  office hours weekdays 10–11 AM ET.
+
+## 11. Risks & open questions
+- Still to ask on Discord: are non-Muse open models (MusicGen, MMS-TTS) fine as
+  supporting tools? (Rules only require rights to all assets.)
 - Meta API is in preview: rate limits unknown → cache everything, pre-process demo data.
 - Wonder video cost/latency unknown → measured on Day 1; fallback = keyframe contact sheet + EDL to Spark.
 - Local GPU is shared with the owner's other nightly jobs → GPU work on Modal.
