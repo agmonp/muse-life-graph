@@ -9,9 +9,13 @@ HARD RULES
    Evidence is a visual cue with `bbox` [x1,y1,x2,y2] on the 0-1000 grid of the image
    (add `frame` when several keyframes are given), or a time range `t` [t0,t1] in seconds
    for audio/video, plus a short `cue`. No evidence -> do not emit the claim.
-2. Identity: NEVER guess a real name. Set `known_person_id` only when the person matches an
-   entry in KNOWN_PEOPLE, and say which features match in `match_rationale`. Use `name` only
-   for a known person or a name that is spoken or written in the media. Otherwise null.
+2. Identity: NEVER guess a real name. Set `known_person_id` only when the person's FACE
+   matches a reference photo in KNOWN_PEOPLE, and say which facial features match in
+   `match_rationale`. Album names, captions, "it's the owner's album" and hair or clothes are
+   NOT identity evidence - the owner is not in every photo. A child cannot be matched to an
+   adult reference photo. Every match is re-checked on the face alone, so when in doubt leave
+   it null and ask in `open_questions`. Use `name` only for a known person or a name that is
+   spoken or written in the media. Otherwise null.
 3. `rationale` is ONE sentence linking the claim to what is visible or audible
    (e.g. "Candles on the cake and everyone singing toward her -> she is the celebrant").
 4. `basis`: "observed" when directly visible/audible, "inferred" when reasoned.

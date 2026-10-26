@@ -31,7 +31,8 @@ from mlg.muse.transcribe import transcribe
 from mlg.perceive.critic import review
 from mlg.perceive.keyframes import audio_track, keyframes
 from mlg.perceive.schema import Perception, fill_missing, strict_schema
-from mlg.people import roster
+from mlg.perceive.verify import verify
+from mlg.people import dataset_of, roster
 
 OUT = DATA / "perceptions"
 PROMPT = (ROOT / "mlg" / "prompts" / "perceive.md").read_text(encoding="utf-8")
@@ -53,11 +54,33 @@ def neighbours(taken_at: str, sha: str, limit: int = 8) -> list[dict]:
         return [dict(r) for r in rows]
 
 
+def context_for(path: str) -> dict | None:
+    """What the person wrote around this item on Facebook/Instagram (album, caption, place)."""
+    con = connect()
+    if not con.execute("SELECT 1 FROM sqlite_master WHERE name='context'").fetchone():
+        return None
+    row = con.execute("SELECT * FROM context WHERE path=?", (path,)).fetchone()
+    if not row:
+        return None
+    ctx = {k: row[k] for k in ("source", "album", "album_description", "place", "lat", "lon", "uploaded") if row[k]}
+    if row["captions"]:
+        ctx["captions"] = row["captions"][:1200]
+    return ctx
+
+
 def build_parts(item: dict, people: list[dict], near: list[dict]) -> tuple[str, list[chat.Part], str]:
     meta = {k: item.get(k) for k in ("kind", "taken_at", "date_source", "width", "height", "duration_s")}
     meta["file_name"] = Path(item["path"]).name
-    if item["date_source"] not in TRUSTED_DATES:
+    if item["date_source"] == "upload":
+        meta["note"] = ("taken_at is the social-media UPLOAD time; the photo may be much older "
+                        "(scans, old prints) - estimate the real date from the content")
+    elif item["date_source"] not in TRUSTED_DATES:
         meta["note"] = "no trusted capture date - estimate it from the content"
+    if ctx := context_for(item["path"]):
+        meta["posted_with"] = ctx
+        meta["posted_with_note"] = ("the owner's own album name / caption / place for this item: strong "
+                                    "context for event, place and people, but captions may be about "
+                                    "something else (opinions, jokes) - do not over-trust them")
     known = [{"id": p["id"], "name": p["name"], "relation": p.get("relation"), "looks": p.get("note")}
              for p in people]
     system = PROMPT.format(media_id=item["sha256"], media_meta=json.dumps(meta, ensure_ascii=False),
@@ -117,11 +140,16 @@ def perceive_item(item: dict, people: list[dict], force: bool = False, redo: boo
             p = Perception.model_validate(fill_missing(copy.deepcopy(ans.data), SCHEMA))
     p.media_id = item["sha256"]
     p, notes = review(p, {x["id"] for x in people}, item["kind"])
+    notes += verify(item, p, people)
 
     effective = item["taken_at"]
-    if item["date_source"] not in TRUSTED_DATES and p.scene.date.estimate and p.scene.date.confidence >= 0.4:
-        est = p.scene.date.estimate
-        effective = est if len(est) > 7 else (est + "-07-01" if len(est) == 4 else est + "-15")
+    est = p.scene.date.estimate
+    if item["date_source"] not in TRUSTED_DATES and est and p.scene.date.confidence >= 0.4:
+        full = est if len(est) > 7 else (est + "-07-01" if len(est) == 4 else est + "-15")
+        # an upload date is right for phone photos; replace it only when the content says
+        # the photo is clearly older (a scan or an old print uploaded years later)
+        if item["date_source"] != "upload" or full[:4] <= str(int(item["taken_at"][:4]) - 2):
+            effective = full
     with WRITE_LOCK:
         stats = graph_write.write(item, p, notes, effective)
     OUT.mkdir(parents=True, exist_ok=True)
@@ -152,12 +180,13 @@ def main() -> None:
     ap.add_argument("--force", action="store_true", help="ask Muse again")
     ap.add_argument("--redo", action="store_true", help="re-run critic + graph write from saved replies")
     a = ap.parse_args()
-    people = roster()
+    rosters = {ds: roster(ds) for ds in ("demo", "real")}
     items = pending(a.kind, a.limit)
-    print(f"{len(items)} items, {len(people)} known people", flush=True)
+    print(f"{len(items)} items, known people: " + ", ".join(f"{k} {len(v)}" for k, v in rosters.items()), flush=True)
     done = failed = 0
     with ThreadPoolExecutor(a.workers) as ex:
-        futs = {ex.submit(perceive_item, it, people, a.force, a.redo): it for it in items}
+        futs = {ex.submit(perceive_item, it, rosters[dataset_of(it["path"])], a.force, a.redo): it
+                for it in items}
         for f in as_completed(futs):
             try:
                 r = f.result()

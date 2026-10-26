@@ -23,8 +23,13 @@ def slug(name: str) -> str:
     return re.sub(r"[^\w]+", "-", name.strip().lower()).strip("-")
 
 
+def dataset_of(path: str) -> str:
+    """'demo' for the fictional Muse Image family, 'real' for everything else."""
+    return "demo" if "data\\demo" in path or "data/demo" in path else "real"
+
+
 def add(name: str, photo: Path, box: tuple[float, float, float, float], note: str = "",
-        relation: str = "", is_owner: bool = False) -> str:
+        relation: str = "", is_owner: bool = False, dataset: str = "real") -> str:
     pid = f"person:{slug(name)}"
     img = open_image(photo)
     x1, y1, x2, y2 = box
@@ -36,19 +41,20 @@ def add(name: str, photo: Path, box: tuple[float, float, float, float], note: st
     with session() as s:
         s.run("""MERGE (p:Person {id: $id})
                  SET p.name = $name, p.note = $note, p.relation = $relation, p.is_owner = $owner,
-                     p.confirmed = true, p.ref_crop = $crop, p.ref_photo = $photo""",
+                     p.confirmed = true, p.ref_crop = $crop, p.ref_photo = $photo, p.dataset = $ds""",
               id=pid, name=name, note=note, relation=relation, owner=is_owner,
-              crop=str(out), photo=str(photo)).consume()
+              crop=str(out), photo=str(photo), ds=dataset).consume()
     return pid
 
 
-def roster() -> list[dict]:
+def roster(dataset: str | None = None) -> list[dict]:
     with session() as s:
         rows = s.run("""MATCH (p:Person {confirmed: true})
+                        WHERE $ds IS NULL OR coalesce(p.dataset, 'real') = $ds
                         OPTIONAL MATCH (p)-[:OBSERVED_AS]->(o)
                         RETURN p.id AS id, p.name AS name, p.note AS note, p.relation AS relation,
                                p.ref_crop AS crop, count(o) AS seen
-                        ORDER BY seen DESC, name LIMIT 40""")
+                        ORDER BY seen DESC, name LIMIT 40""", ds=dataset)
         return [dict(r) for r in rows]
 
 

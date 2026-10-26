@@ -115,6 +115,30 @@ def test_video_dedup_reencode(tmp_path: Path):
     assert scan(tmp_path, tmp_path / "v.sqlite")["duplicates"] == 1
 
 
+FB_ALBUM = """<html><body><div><header><div><h1 class="x">Shlomit 30</h1><p class="y">birthday party</p></div></header>
+<main><section class="s"><div><a href="your_facebook_activity/posts/media/S30_1/1.jpg"><img src="your_facebook_activity/posts/media/S30_1/1.jpg" /></a></div>
+<footer class="f"><a href="https://www.facebook.com/dyi/l/?l=x"><div class="d">Apr 25, 2010 10:16:47 pm</div></a></footer></section></main></div></body></html>"""
+FB_POSTS = """<html><body><section class="s"><h2 class="h">Someone added a new photo.</h2><div><div>
+<a href="your_facebook_activity/posts/media/S30_1/1.jpg"><img src="your_facebook_activity/posts/media/S30_1/1.jpg" /></a>
+<div>Shlomit 30</div></div><div><div>Place: &#x200e;<a href="https://www.facebook.com/pages/x">Tel Aviv</a> (32.07, 34.79)&#x200e;</div></div>
+<div><span dir="rtl">מזל טוב שלומית!</span></div></div>
+<footer><a href="(fb)"><div>Apr 26, 2010 9:00:00 am</div></a></footer></section></body></html>"""
+
+
+def test_facebook_export_parse(tmp_path: Path):
+    import zipfile
+    from mlg.ingest.meta_export import parse
+    zp = tmp_path / "fb.zip"
+    with zipfile.ZipFile(zp, "w") as z:
+        z.writestr("your_facebook_activity/posts/album/3.html", FB_ALBUM)
+        z.writestr("your_facebook_activity/posts/your_posts__check_ins__photos_and_videos_1.html", FB_POSTS)
+    info = parse([zp])["your_facebook_activity/posts/media/S30_1/1.jpg"]
+    assert info.album == "Shlomit 30" and info.album_description == "birthday party"
+    assert info.place == "Tel Aviv" and info.lat == pytest.approx(32.07)
+    assert "מזל טוב שלומית!" in info.captions
+    assert info.uploaded.startswith("2010-04-2")
+
+
 @pytest.mark.parametrize("name,expected", [
     ("IMG_20190612_153012", "2019-06-12T15:30:12"),
     ("VID-20211231-WA0003", "2021-12-31T00:00:00"),

@@ -23,6 +23,17 @@ def review(p: Perception, known_ids: set[str], kind: str = "photo") -> tuple[Per
     notes: list[str] = []
     spoken = " ".join(u.text for u in p.utterances).lower()
 
+    seen_ids: set[str] = set()
+    for group in (p.people, p.objects, p.activities, p.utterances):
+        for x in group:
+            if x.local_id in seen_ids:  # the model reused an id; edges can't tell them apart
+                old, n = x.local_id, 2
+                while f"{old}_{n}" in seen_ids:
+                    n += 1
+                x.local_id = f"{old}_{n}"
+                notes.append(f"duplicate local id {old} renamed to {x.local_id}")
+            seen_ids.add(x.local_id)
+
     keep_people = []
     for person in p.people:
         person.confidence = _clamp(person.confidence)
