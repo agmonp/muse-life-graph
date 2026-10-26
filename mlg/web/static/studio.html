@@ -1,0 +1,196 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Edit Room</title>
+<style>
+:root {
+  --bg: #f6f5f2; --card: #ffffff; --ink: #1d1d1f; --muted: #6b6b70; --line: #e4e2dc;
+  --accent: #3b5bdb; --accent-ink: #ffffff; --ok: #2f9e44; --bad: #c92a2a; --chip: #eef0f6; --warn: #e8590c;
+}
+@media (prefers-color-scheme: dark) {
+  :root { --bg: #151517; --card: #1f1f22; --ink: #ececee; --muted: #9a9aa2; --line: #2e2e33;
+          --accent: #748ffc; --accent-ink: #0f1020; --ok: #51cf66; --bad: #ff6b6b; --chip: #2a2c36; --warn: #ff922b; }
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--ink);
+       font: 15px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif; }
+nav { display: flex; gap: 16px; align-items: center; padding: 10px 16px; border-bottom: 1px solid var(--line); }
+nav b { font-size: 18px; }
+nav a { color: var(--muted); text-decoration: none; }
+.wrap { display: grid; grid-template-columns: 260px 1fr; gap: 16px; padding: 16px; max-width: 1400px; margin: auto; }
+@media (max-width: 860px) { .wrap { grid-template-columns: 1fr; } }
+.card { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 14px; }
+h2 { font-size: 16px; margin: 0 0 10px; }
+h1 { font-size: 22px; margin: 0; }
+textarea { width: 100%; min-height: 90px; font: inherit; padding: 10px; border-radius: 10px; resize: vertical;
+           border: 1px solid var(--line); background: var(--bg); color: var(--ink); }
+button, select { font: inherit; border-radius: 10px; padding: 8px 12px; min-height: 40px; cursor: pointer;
+                 border: 1px solid var(--line); background: var(--card); color: var(--ink); }
+button.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+button:disabled { opacity: .5; cursor: default; }
+.row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-top: 8px; }
+.films { display: flex; flex-direction: column; gap: 6px; margin-top: 14px; }
+.films button { text-align: left; display: block; width: 100%; }
+.films button.sel { outline: 2px solid var(--accent); }
+.sub { color: var(--muted); font-size: 13px; }
+.main { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+.status { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 12px; background: var(--chip); }
+.status.running { color: var(--accent); } .status.done { color: var(--ok); } .status.failed { color: var(--bad); }
+.log { display: flex; flex-direction: column; gap: 6px; max-height: 340px; overflow: auto; }
+.log div { display: grid; grid-template-columns: 52px 120px 1fr; gap: 8px; font-size: 13.5px; }
+.log .who { font-weight: 600; }
+.log .why { color: var(--muted); grid-column: 3; }
+@media (max-width: 560px) { .log div { grid-template-columns: 44px 1fr; } .log .why, .log .did { grid-column: 2; } }
+.scenes { display: flex; gap: 10px; overflow-x: auto; padding-bottom: 6px; }
+.scene { flex: 0 0 210px; background: var(--bg); border: 1px solid var(--line); border-radius: 12px; padding: 8px; }
+.thumbs { display: flex; gap: 4px; flex-wrap: wrap; }
+.thumb { position: relative; width: 94px; height: 64px; border-radius: 8px; overflow: hidden; background: var(--chip); }
+.thumb img { width: 100%; height: 100%; object-fit: cover; }
+.thumb.out img { filter: grayscale(1) opacity(.45); }
+.thumb.out::after { content: "✕"; position: absolute; inset: 0; display: grid; place-items: center;
+                    color: var(--bad); font-size: 30px; font-weight: 700; }
+.scene .line { font-size: 13px; margin-top: 6px; }
+.scene s { color: var(--muted); }
+.versions { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+@media (max-width: 860px) { .versions { grid-template-columns: 1fr; } }
+video { width: 100%; max-height: 62vh; background: #000; border-radius: 10px; display: block; }
+.score { font-size: 28px; font-weight: 700; }
+.notes { display: flex; flex-direction: column; gap: 8px; margin-top: 10px; }
+.note { border-left: 3px solid var(--warn); padding: 2px 0 2px 10px; font-size: 13.5px; }
+.note.applied { border-color: var(--ok); }
+.note button { min-height: 28px; padding: 2px 8px; font-size: 12px; margin-right: 6px; }
+.empty { color: var(--muted); text-align: center; padding: 40px 0; }
+.err { color: var(--bad); white-space: pre-wrap; }
+</style>
+</head>
+<body>
+<nav><b>Muse Life Graph</b><a href="/studio">Edit Room</a><a href="/">Who is this?</a></nav>
+<div class="wrap">
+  <aside class="card">
+    <h2>New film</h2>
+    <textarea id="req" dir="auto" placeholder="A 60-second film for grandma Ruth's 70th birthday, warm and a little funny, ending with the whole family together."></textarea>
+    <div class="row">
+      <select id="dataset" aria-label="Dataset"><option value="demo">Demo family</option><option value="real">My photos</option></select>
+      <button class="primary" id="make">Make the film</button>
+    </div>
+    <div class="films" id="films"></div>
+  </aside>
+  <section class="main" id="main"><div class="card empty">Write one sentence and the crew makes the film.</div></section>
+</div>
+<script>
+const $ = (s, el = document) => el.querySelector(s);
+const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+let current = null, timer = null, lastLogLen = -1, rendered = {};
+
+async function api(path, body) {
+  const r = await fetch(path, body ? {method: 'POST', headers: {'Content-Type': 'application/json'},
+                                      body: JSON.stringify(body)} : {});
+  if (!r.ok) throw new Error((await r.json().catch(() => ({}))).detail || r.statusText);
+  return r.json();
+}
+
+async function loadFilms() {
+  const films = await api('/api/films');
+  $('#films').innerHTML = films.map(f => `<button data-id="${esc(f.id)}" class="${f.id === current ? 'sel' : ''}">
+      <div>${esc(f.title)}</div>
+      <div class="sub"><span class="status ${esc(f.status)}">${esc(f.status)}</span>
+        ${f.v1 != null ? ` v1 ${f.v1}/10` : ''}${f.v2 != null ? ` → v2 ${f.v2}/10` : ''}</div></button>`).join('');
+  if (!current && films.length) open(films[0].id);
+}
+
+function open(id) {
+  current = id; lastLogLen = -1; rendered = {};
+  document.querySelectorAll('#films button').forEach(b => b.classList.toggle('sel', b.dataset.id === id));
+  poll();
+}
+
+async function poll() {
+  clearTimeout(timer);
+  if (!current) return;
+  const st = await api(`/api/films/${current}`);
+  render(st);
+  if (st.status === 'running') timer = setTimeout(poll, 2000); else loadFilms();
+}
+
+function noteHtml(n, v, applied) {
+  const isApplied = applied.some(a => a.includes(`shot ${n.shot}: ${n.op}`));
+  return `<div class="note ${isApplied ? 'applied' : ''}">
+    <button data-seek="${v}" data-t="${n.t}">${Math.floor(n.t / 60)}:${String(Math.floor(n.t % 60)).padStart(2, '0')}</button>
+    <b>${esc(n.op)}</b> shot ${n.shot}${isApplied ? ' · applied' : ''}<br>
+    <span>${esc(n.problem)}</span></div>`;
+}
+
+function versionHtml(st, v) {
+  const x = (st.versions || {})[v];
+  const label = v === 'v1' ? 'Draft v1' : 'After the critic: v2';
+  if (!x) return `<div class="card"><h2>${label}</h2><div class="empty">${st.status === 'running' ? 'not yet…' : '—'}</div></div>`;
+  return `<div class="card"><h2>${label} <span class="sub">${x.duration ? x.duration.toFixed(0) + ' s' : ''}</span></h2>
+    <video id="vid_${v}" controls preload="metadata" src="/api/films/${st.id}/video/${v}?d=${x.duration}"></video>
+    ${x.score != null ? `<div class="row"><span class="score">${x.score}/10</span><span class="sub">${esc(x.summary)}</span></div>` : ''}
+    ${v === 'v1' && x.notes ? `<div class="notes">${x.notes.map(n => noteHtml(n, v, st.applied || [])).join('')}</div>` : ''}
+  </div>`;
+}
+
+function scenesHtml(st) {
+  if (!st.scenes) return '';
+  const pc = st.picture_check || {};
+  return `<div class="card"><h2>Scenes <span class="sub">✕ = taken out by the Picture Checker (hover for why)</span></h2><div class="scenes">` +
+    st.scenes.map(sc => {
+      const chk = pc[String(sc.order)] || {verdicts: []};
+      const verdict = Object.fromEntries(chk.verdicts.map(v => [v.moment_id, v]));
+      const thumbs = sc.moments.map(m => {
+        const v = verdict[m];
+        return `<div class="thumb ${v && !v.keep ? 'out' : ''}" title="${esc(v ? v.reason : '')}">
+          <img loading="lazy" src="/api/photo/${encodeURIComponent(m.split(':')[0])}" alt=""></div>`;
+      }).join('');
+      const line = chk.narration_fix && sc.narration
+        ? `<s dir="auto">${esc(sc.narration)}</s><br><span dir="auto">${esc(chk.narration_fix)}</span>`
+        : `<span dir="auto">${esc(sc.narration || '')}</span>`;
+      return `<div class="scene"><div class="sub">${sc.order} · ${esc(sc.emotion || '')}</div>
+        <div class="thumbs">${thumbs}</div><div class="line">${line}</div>
+        <div class="sub" dir="auto">${esc(chk.note || sc.intent)}</div></div>`;
+    }).join('') + '</div></div>';
+}
+
+function render(st) {
+  const main = $('#main');
+  const head = `<div class="card"><div class="row" style="margin:0;justify-content:space-between">
+      <h1 dir="auto">${esc(st.title || 'Planning…')}</h1><span class="status ${esc(st.status)}">${esc(st.status)}</span></div>
+      <div class="sub" dir="auto">“${esc(st.request)}”</div>${st.error ? `<div class="err">${esc(st.error)}</div>` : ''}</div>`;
+  const log = `<div class="card"><h2>The crew at work</h2><div class="log">` + st.log.map(e =>
+      `<div><span class="sub">${e.t.toFixed(0)}s</span><span class="who">${esc(e.who)}</span><span class="did" dir="auto">${esc(e.did)}</span>
+       ${e.why ? `<span class="why" dir="auto">${esc(e.why)}</span>` : ''}</div>`).join('') + `</div></div>`;
+  // keep the video elements alive while polling so playback isn't interrupted
+  const vkey = JSON.stringify(Object.fromEntries(Object.entries(st.versions || {}).map(([k, v]) => [k, v.score ?? v.duration])));
+  if (rendered.vkey !== vkey || !$('#versions')) {
+    main.innerHTML = `<div id="headbox">${head}</div><div id="logbox">${log}</div><div id="scenebox">${scenesHtml(st)}</div>` +
+      `<div class="versions" id="versions">${versionHtml(st, 'v1')}${versionHtml(st, 'v2')}</div>`;
+    rendered.vkey = vkey;
+  } else {
+    $('#headbox').innerHTML = head;
+    $('#logbox').innerHTML = log;
+    $('#scenebox').innerHTML = scenesHtml(st);
+  }
+  const box = $('.log'); if (box && st.log.length !== lastLogLen) { box.scrollTop = box.scrollHeight; lastLogLen = st.log.length; }
+}
+
+$('#main').addEventListener('click', e => {
+  const b = e.target.closest('button[data-seek]');
+  if (!b) return;
+  const v = $(`#vid_${b.dataset.seek}`);
+  if (v) { v.currentTime = Math.max(0, +b.dataset.t - 0.5); v.play(); v.scrollIntoView({block: 'center', behavior: 'smooth'}); }
+});
+$('#films').addEventListener('click', e => { const b = e.target.closest('button[data-id]'); if (b) open(b.dataset.id); });
+$('#make').addEventListener('click', async () => {
+  const request = $('#req').value.trim() || $('#req').placeholder;
+  $('#make').disabled = true;
+  try { const {id} = await api('/api/films', {request, dataset: $('#dataset').value}); await loadFilms(); open(id); }
+  catch (e) { alert(e.message); }
+  finally { $('#make').disabled = false; }
+});
+loadFilms();
+</script>
+</body>
+</html>

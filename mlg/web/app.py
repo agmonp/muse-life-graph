@@ -240,3 +240,85 @@ def api_recheck(dataset: str = "real"):
 @app.get("/api/recheck")
 def api_recheck_status():
     return RECHECK
+
+
+# ---------------- Studio / Edit Room ----------------
+
+from mlg.studio.make import FILMS, make  # noqa: E402
+
+FILM_THREADS: dict[str, threading.Thread] = {}
+
+
+@app.get("/studio")
+def studio_page():
+    return FileResponse(STATIC / "studio.html")
+
+
+class FilmRequest(BaseModel):
+    request: str
+    dataset: str = "demo"
+
+
+@app.post("/api/films")
+def api_make_film(r: FilmRequest):
+    if not r.request.strip():
+        raise HTTPException(400, "empty request")
+    film_id = time.strftime("film_%Y%m%d_%H%M%S")
+
+    def run():
+        try:
+            make(r.request.strip(), r.dataset, film_id)
+        except Exception:  # noqa: BLE001 - the error is in state.json for the page
+            pass
+
+    th = threading.Thread(target=run, daemon=True)
+    FILM_THREADS[film_id] = th
+    th.start()
+    for _ in range(50):   # wait until state.json exists so the page can poll it
+        if (FILMS / film_id / "state.json").exists():
+            break
+        time.sleep(0.1)
+    return {"id": film_id}
+
+
+def _state(film_id: str) -> dict:
+    import json
+    p = FILMS / film_id / "state.json"
+    if not p.exists():
+        raise HTTPException(404, "no such film")
+    st = json.loads(p.read_text(encoding="utf-8"))
+    if st.get("status") == "running" and film_id not in FILM_THREADS:
+        st["status"] = "interrupted"   # the server restarted while this film was being made
+    return st
+
+
+@app.get("/api/films")
+def api_films():
+    out = []
+    for d in sorted(FILMS.glob("film_*"), reverse=True):
+        try:
+            st = _state(d.name)
+        except HTTPException:
+            continue
+        v = st.get("versions", {})
+        out.append({"id": st["id"], "title": st.get("title") or st["request"][:60], "status": st["status"],
+                    "request": st["request"], "v1": v.get("v1", {}).get("score"), "v2": v.get("v2", {}).get("score")})
+    return out
+
+
+@app.get("/api/films/{film_id}")
+def api_film(film_id: str):
+    st = _state(film_id)
+    for v in st.get("versions", {}).values():
+        v.pop("path", None)
+    return st
+
+
+@app.get("/api/films/{film_id}/video/{version}")
+def api_film_video(film_id: str, version: str):
+    if version not in ("v1", "v2"):
+        raise HTTPException(404)
+    p = FILMS / film_id / version / "film.mp4"
+    if not p.exists():
+        raise HTTPException(404, "not rendered yet")
+    return FileResponse(p, media_type="video/mp4")

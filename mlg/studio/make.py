@@ -1,26 +1,55 @@
-"""One sentence -> a film.
+"""One sentence -> a film, made by the crew and revised once after the critic watches it.
 
-    python -m mlg.studio.make "A 60-second film for grandma Ruth's 70th ..." [--dataset demo] [--height 720]
+    python -m mlg.studio.make "A 60-second film for grandma Ruth's 70th ..." [--dataset demo]
 
-Writes data/films/<id>/ with storyboard.json (brief, script, crew log), edl.json
-and film.mp4, and records the film in the graph (Film -> Scene -> Shot -> MediaItem).
+Pipeline (each step reports to the crew log the Edit Room shows live):
+  Researcher -> Producer -> Screenwriter -> script check -> Picture Checker -> Editor
+  -> draft v1 (480p) -> Critic watches v1 -> Editor applies the notes -> v2 (720p) -> Critic scores v2
+Everything lands in data/films/<id>/ (state.json, storyboard.json, edl_v1/v2.json, v1/, v2/)
+and the film is recorded in the graph (Film -> Scene -> Shot -> MediaItem).
 """
 from __future__ import annotations
 
 import argparse
+import copy
 import json
 import time
 from pathlib import Path
+from typing import Callable
 
 from mlg.config import DATA
 from mlg.graph.db import session
-from mlg.studio import edit, render
+from mlg.studio import checker, critic, edit, render
 from mlg.studio.plan import plan
 
 FILMS = DATA / "films"
 
 
-def record(film_id: str, storyboard: dict, edl: dict, path: Path) -> None:
+class Job:
+    """Film state on disk; every update is visible to the Edit Room immediately."""
+
+    def __init__(self, film_id: str, request: str, dataset: str):
+        self.dir = FILMS / film_id
+        self.dir.mkdir(parents=True, exist_ok=True)
+        self.state = {"id": film_id, "request": request, "dataset": dataset, "status": "running",
+                      "created": time.time(), "log": [], "versions": {}, "error": None}
+        self.save()
+
+    def save(self) -> None:
+        tmp = self.dir / "state.tmp"
+        tmp.write_text(json.dumps(self.state, ensure_ascii=False, indent=1, default=str), encoding="utf-8")
+        tmp.replace(self.dir / "state.json")
+
+    def say(self, who: str, did: str, why: str = "", **extra) -> None:
+        self.state["log"].append({"t": round(time.time() - self.state["created"], 1), "who": who, "did": did,
+                                  "why": why, **extra})
+        self.save()
+
+    def put(self, name: str, obj) -> None:
+        (self.dir / name).write_text(json.dumps(obj, ensure_ascii=False, indent=1, default=str), encoding="utf-8")
+
+
+def record(film_id: str, storyboard: dict, edl: dict, path: Path, scores: dict) -> None:
     sc = storyboard["script"]
     scenes = [{"id": f"{film_id}:s{s['order']}", "order": s["order"], "intent": s["intent"],
                "line": s.get("narration"), "emotion": s.get("emotion"), "moments": s["moment_ids"]}
@@ -30,12 +59,12 @@ def record(film_id: str, storyboard: dict, edl: dict, path: Path) -> None:
              for i, s in enumerate(edl["shots"])]
     with session() as s:
         s.run("""MERGE (f:Film {id: $id})
-                 SET f.request = $req, f.title = $title, f.logline = $log, f.path = $path,
-                     f.duration = $dur, f.created = $at, f.dataset = $ds
+                 SET f.request = $req, f.title = $title, f.logline = $log, f.path = $path, f.duration = $dur,
+                     f.created = $at, f.dataset = $ds, f.score_v1 = $s1, f.score_v2 = $s2
                  WITH f UNWIND $subjects AS pid MATCH (p:Person {id: pid}) MERGE (f)-[:FOR]->(p)""",
               id=film_id, req=storyboard["request"], title=sc["title"], log=sc["logline"], path=str(path),
-              dur=edl["duration"], at=time.time(), ds=storyboard["dataset"],
-              subjects=storyboard["brief"].get("subject_ids", [])).consume()
+              dur=edl["duration"], at=time.time(), ds=storyboard["dataset"], s1=scores.get("v1"),
+              s2=scores.get("v2"), subjects=storyboard["brief"].get("subject_ids", [])).consume()
         s.run("""MATCH (f:Film {id: $id}) UNWIND $scenes AS x
                  MERGE (sc:Scene {id: x.id}) SET sc.order = x.order, sc.intent = x.intent, sc.line = x.line,
                                                  sc.emotion = x.emotion
@@ -47,30 +76,83 @@ def record(film_id: str, storyboard: dict, edl: dict, path: Path) -> None:
                  MERGE (sc)-[:HAS_SHOT]->(sh) MERGE (sh)-[:USES]->(mi)""", shots=shots).consume()
 
 
-def make(request: str, dataset: str = "demo", height: int = 720) -> dict:
-    film_id = time.strftime("film_%Y%m%d_%H%M%S")
-    out = FILMS / film_id
-    out.mkdir(parents=True, exist_ok=True)
-    t0 = time.perf_counter()
-    sb = plan(request, dataset)
-    (out / "storyboard.json").write_text(json.dumps(sb, ensure_ascii=False, indent=1, default=str), encoding="utf-8")
-    t1 = time.perf_counter()
-    edl = edit.build(sb)
-    (out / "edl.json").write_text(json.dumps(edl, ensure_ascii=False, indent=1), encoding="utf-8")
-    path = render.render(edl, out, height, seed=int(time.time()) % 1000)
-    t2 = time.perf_counter()
-    record(film_id, sb, edl, path)
-    return {"film": film_id, "path": str(path), "duration_s": edl["duration"], "shots": len(edl["shots"]),
-            "plan_s": round(t1 - t0, 1), "render_s": round(t2 - t1, 1)}
+def make(request: str, dataset: str = "demo", film_id: str | None = None,
+         on_start: Callable[[str], None] | None = None) -> dict:
+    film_id = film_id or time.strftime("film_%Y%m%d_%H%M%S")
+    job = Job(film_id, request, dataset)
+    if on_start:
+        on_start(film_id)
+    try:
+        job.say("Producer", "reading the request", request)
+        sb = plan(request, dataset)
+        for entry in sb["crew_log"]:
+            job.say(entry["who"], entry["did"], entry.get("why", ""))
+        job.state["title"] = sb["script"]["title"]
+        job.state["brief"] = sb["brief"]
+        job.state["scenes"] = [{"order": s["order"], "intent": s["intent"], "narration": s.get("narration"),
+                                "emotion": s.get("emotion"), "moments": list(s["moment_ids"])}
+                               for s in sb["script"]["scenes"]]
+
+        job.say("Picture Checker", "looking at every picture of every scene")
+        notes = checker.check(sb)
+        job.state["picture_check"] = {k: {"note": v["note"], "verdicts": v["verdicts"],
+                                          "narration_fix": v.get("narration_fix") if not v["narration_ok"] else None}
+                                      for k, v in sb["picture_check"].items()}
+        job.say("Picture Checker", f"{len(notes)} changes" if notes else "every picture fits its scene",
+                "; ".join(notes))
+        job.put("storyboard.json", sb)
+
+        edl1 = edit.build(sb)
+        job.put("edl_v1.json", edl1)
+        job.say("Editor", f"{len(edl1['shots'])} shots, {edl1['duration']:.0f} s, {edl1['aspect']}",
+                "camera drifts toward the person each scene is about; voices never cut")
+        job.say("Renderer", "rendering draft v1 (480p)")
+        t = time.perf_counter()
+        v1 = render.render(edl1, job.dir / "v1", 480, seed=int(time.time()) % 1000)
+        job.state["versions"]["v1"] = {"path": str(v1), "duration": edl1["duration"]}
+        job.say("Renderer", f"draft v1 ready in {time.perf_counter() - t:.0f} s")
+
+        job.say("Critic", "watching draft v1")
+        c1 = critic.watch(v1, edl1, sb["brief"])
+        job.put("critique_v1.json", c1)
+        job.state["versions"]["v1"].update(score=c1["score"], summary=c1["summary"], notes=c1["notes"])
+        job.say("Critic", f"v1 scored {c1['score']}/10", c1["summary"])
+
+        edl2, applied = critic.apply(copy.deepcopy(edl1), c1)
+        job.put("edl_v2.json", edl2)
+        job.state["applied"] = applied
+        job.say("Editor", f"applied {len(applied)} of {len(c1['notes'])} notes", "; ".join(applied))
+        job.say("Renderer", "rendering v2 (720p)")
+        t = time.perf_counter()
+        v2 = render.render(edl2, job.dir / "v2", 720, seed=int(time.time()) % 1000)
+        job.state["versions"]["v2"] = {"path": str(v2), "duration": edl2["duration"]}
+        job.say("Renderer", f"v2 ready in {time.perf_counter() - t:.0f} s")
+
+        job.say("Critic", "watching v2")
+        c2 = critic.watch(v2, edl2, sb["brief"])
+        job.put("critique_v2.json", c2)
+        job.state["versions"]["v2"].update(score=c2["score"], summary=c2["summary"], notes=c2["notes"])
+        job.say("Critic", f"v2 scored {c2['score']}/10 (v1 was {c1['score']})", c2["summary"])
+
+        record(film_id, sb, edl2, v2, {"v1": c1["score"], "v2": c2["score"]})
+        job.state["status"] = "done"
+        job.save()
+    except Exception as e:  # noqa: BLE001 - surface the failure in the Edit Room
+        job.state["status"] = "failed"
+        job.state["error"] = f"{type(e).__name__}: {e}"[:600]
+        job.save()
+        raise
+    return job.state
 
 
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("request")
     ap.add_argument("--dataset", default="demo")
-    ap.add_argument("--height", type=int, default=720)
     a = ap.parse_args()
-    print(json.dumps(make(a.request, a.dataset, a.height), ensure_ascii=False))
+    st = make(a.request, a.dataset)
+    print(json.dumps({"film": st["id"], "v1": st["versions"]["v1"].get("score"),
+                      "v2": st["versions"]["v2"].get("score")}))
 
 
 if __name__ == "__main__":
