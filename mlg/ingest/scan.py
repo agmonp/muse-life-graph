@@ -127,7 +127,8 @@ def mark_duplicates(con: sqlite3.Connection) -> int:
 def scan(folder: Path, db: Path = DB) -> dict:
     con = connect(db)
     new = 0
-    for path in sorted(p for p in folder.rglob("*") if p.is_file()):
+    # absolute paths: the web app and workers may run from another working directory
+    for path in sorted(p for p in folder.resolve().rglob("*") if p.is_file()):
         if ingest_file(con, path):
             new += 1
             if new % 50 == 0:

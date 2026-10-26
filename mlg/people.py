@@ -47,15 +47,65 @@ def add(name: str, photo: Path, box: tuple[float, float, float, float], note: st
     return pid
 
 
+def _save_crop(name: str, crop) -> Path:
+    CROPS.mkdir(parents=True, exist_ok=True)
+    n = 1
+    while (out := CROPS / f"{slug(name)}_{n}.jpg").exists():
+        n += 1
+    crop = crop.convert("RGB")
+    crop.thumbnail((384, 384))
+    crop.save(out, quality=90)
+    return out
+
+
+def add_ref(pid: str, crop) -> str:
+    """Another reference photo for a known person (from a confirmed face)."""
+    with session() as s:
+        name = s.run("MATCH (p:Person {id: $id}) RETURN p.name AS n", id=pid).single()["n"]
+        out = _save_crop(name, crop)
+        s.run("MATCH (p:Person {id: $id}) SET p.ref_crops = coalesce(p.ref_crops, []) + $c",
+              id=pid, c=str(out)).consume()
+    return str(out)
+
+
+def remove_ref(pid: str, ref: str) -> None:
+    with session() as s:
+        s.run("""MATCH (p:Person {id: $id})
+                 SET p.ref_crops = [c IN coalesce(p.ref_crops, []) WHERE c <> $ref]""", id=pid, ref=ref).consume()
+    Path(ref).unlink(missing_ok=True)
+
+
+def new_person(name: str, crop, dataset: str = "real", note: str = "") -> str:
+    """A person first named on the Who-is-this screen; the confirmed face is the reference."""
+    pid = f"person:{slug(name)}"
+    with session() as s:
+        exists = s.run("MATCH (p:Person {id: $id}) RETURN p.id AS id", id=pid).single()
+    if exists:
+        add_ref(pid, crop)
+        return pid
+    out = _save_crop(name, crop)
+    with session() as s:
+        s.run("""MERGE (p:Person {id: $id})
+                 SET p.name = $name, p.note = $note, p.confirmed = true, p.ref_crop = $crop,
+                     p.dataset = $ds, p.is_owner = false""",
+              id=pid, name=name, note=note, crop=str(out), ds=dataset).consume()
+    return pid
+
+
 def roster(dataset: str | None = None) -> list[dict]:
     with session() as s:
         rows = s.run("""MATCH (p:Person {confirmed: true})
                         WHERE $ds IS NULL OR coalesce(p.dataset, 'real') = $ds
                         OPTIONAL MATCH (p)-[:OBSERVED_AS]->(o)
                         RETURN p.id AS id, p.name AS name, p.note AS note, p.relation AS relation,
-                               p.ref_crop AS crop, count(o) AS seen
+                               p.ref_crop AS crop, coalesce(p.ref_crops, []) AS more, count(o) AS seen
                         ORDER BY seen DESC, name LIMIT 40""", ds=dataset)
-        return [dict(r) for r in rows]
+        out = []
+        for r in rows:
+            d = dict(r)
+            d["crops"] = [c for c in [d["crop"], *d.pop("more")] if c and Path(c).exists()]
+            out.append(d)
+        return out
 
 
 def main() -> None:

@@ -1,0 +1,11 @@
+﻿{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "mlg-web",
+      "runtimeExecutable": ".venv\\Scripts\\python.exe",
+      "runtimeArgs": ["-X", "utf8", "-m", "uvicorn", "mlg.web.app:app", "--port", "8800"],
+      "port": 8800
+    }
+  ]
+}

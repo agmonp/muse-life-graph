@@ -38,7 +38,8 @@ def _endpoint(sha: str, ref: str, labels: dict[str, str]) -> tuple[str, dict] | 
     return None
 
 
-def write(item: dict, p: Perception, notes: list[str], effective_date: str) -> dict:
+def write(item: dict, p: Perception, notes: list[str], effective_date: str,
+          candidates: dict[str, dict] | None = None, user_actions: dict[str, str] | None = None) -> dict:
     sha = item["sha256"]
     labels = ({x.local_id: "Observation" for x in p.people} | {x.local_id: "Object" for x in p.objects}
               | {x.local_id: "Activity" for x in p.activities} | {x.local_id: "Utterance" for x in p.utterances})
@@ -60,12 +61,14 @@ def write(item: dict, p: Perception, notes: list[str], effective_date: str) -> d
         })
 
     with session() as s:
-        s.execute_write(_write_tx, sha, item, p, notes, effective_date, edges_by_shape, topics)
+        s.execute_write(_write_tx, sha, item, p, notes, effective_date, edges_by_shape, topics,
+                        candidates or {}, user_actions or {})
     return {"people": len(p.people), "edges": sum(len(v) for v in edges_by_shape.values()),
             "known": sum(1 for x in p.people if x.known_person_id)}
 
 
-def _write_tx(tx, sha, item, p: Perception, notes, effective_date, edges_by_shape, topics):
+def _write_tx(tx, sha, item, p: Perception, notes, effective_date, edges_by_shape, topics,
+              candidates, user_actions):
     sc = p.scene
     tx.run("""MERGE (mi:MediaItem {id: $sha})
               SET mi.path = $path, mi.kind = $kind, mi.taken_at = $taken_at, mi.date_source = $date_source,
@@ -95,7 +98,10 @@ def _write_tx(tx, sha, item, p: Perception, notes, effective_date, edges_by_shap
     tx.run("""MATCH (mi:MediaItem {id: $sha}), (m:Moment {id: $mid})
               UNWIND $people AS x
               CREATE (o:Observation {id: x.id, appearance: x.appearance, role: x.role, expression: x.expression,
-                                     bbox: x.bbox, frame: x.frame, confidence: x.confidence, name_hint: x.name})
+                                     bbox: x.bbox, frame: x.frame, confidence: x.confidence, name_hint: x.name,
+                                     candidate: x.cand, candidate_verdict: x.cand_verdict,
+                                     candidate_conf: x.cand_conf, candidate_reason: x.cand_reason,
+                                     user_action: x.user_action})
               CREATE (o)-[:IN]->(mi)
               CREATE (o)-[:PRESENT_AT {role: x.role, confidence: x.confidence}]->(m)
               WITH o, x WHERE x.known IS NOT NULL
@@ -104,7 +110,12 @@ def _write_tx(tx, sha, item, p: Perception, notes, effective_date, edges_by_shap
            sha=sha, mid=f"{sha}:moment",
            people=[{"id": f"{sha}:{x.local_id}", "appearance": x.appearance, "role": x.role_in_scene,
                     "expression": x.expression, "bbox": x.bbox, "frame": x.frame, "confidence": x.confidence,
-                    "name": x.name, "known": x.known_person_id, "why": x.match_rationale} for x in p.people]).consume()
+                    "name": x.name, "known": x.known_person_id, "why": x.match_rationale,
+                    "cand": candidates.get(x.local_id, {}).get("person"),
+                    "cand_verdict": candidates.get(x.local_id, {}).get("verdict"),
+                    "cand_conf": candidates.get(x.local_id, {}).get("conf"),
+                    "cand_reason": candidates.get(x.local_id, {}).get("reason"),
+                    "user_action": user_actions.get(x.local_id)} for x in p.people]).consume()
     tx.run("""MATCH (m:Moment {id: $mid})
               UNWIND $objs AS x
               CREATE (ob:Object {id: x.id, name: x.name, category: x.category, bbox: x.bbox})

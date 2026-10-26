@@ -1,0 +1,242 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Who is this?</title>
+<style>
+:root {
+  --bg: #f6f5f2; --card: #ffffff; --ink: #1d1d1f; --muted: #6b6b70; --line: #e4e2dc;
+  --accent: #3b5bdb; --accent-ink: #ffffff; --yes: #2f9e44; --no: #c92a2a; --chip: #eef0f6;
+}
+@media (prefers-color-scheme: dark) {
+  :root { --bg: #151517; --card: #1f1f22; --ink: #ececee; --muted: #9a9aa2; --line: #2e2e33;
+          --accent: #748ffc; --accent-ink: #0f1020; --yes: #51cf66; --no: #ff6b6b; --chip: #2a2c36; }
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--ink);
+       font: 15px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif; }
+header { position: sticky; top: 0; z-index: 5; background: var(--bg); border-bottom: 1px solid var(--line);
+         padding: 12px 16px; display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; }
+h1 { font-size: 20px; margin: 0; }
+.sub { color: var(--muted); font-size: 13px; }
+.spacer { flex: 1; }
+button { font: inherit; border: 1px solid var(--line); background: var(--card); color: var(--ink);
+         border-radius: 10px; padding: 8px 12px; cursor: pointer; min-height: 40px; }
+button.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+button.yes { background: var(--yes); color: #fff; border-color: var(--yes); }
+button:disabled { opacity: .5; cursor: default; }
+select { font: inherit; border-radius: 10px; padding: 8px; border: 1px solid var(--line);
+         background: var(--card); color: var(--ink); min-height: 40px; }
+.people { display: flex; gap: 8px; overflow-x: auto; padding: 10px 16px; }
+.person { display: flex; align-items: center; gap: 6px; background: var(--chip); border-radius: 999px;
+          padding: 3px 10px 3px 3px; white-space: nowrap; font-size: 13px; }
+.person img { width: 28px; height: 28px; border-radius: 50%; object-fit: cover; }
+main { padding: 8px 16px 96px; display: grid; gap: 14px;
+       grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); }
+.card { background: var(--card); border: 1px solid var(--line); border-radius: 14px; overflow: hidden;
+        display: flex; flex-direction: column; }
+.card.focus { outline: 2px solid var(--accent); }
+.imgs { display: grid; grid-template-columns: 1fr 1fr; gap: 2px; background: var(--line); }
+.imgs img { width: 100%; aspect-ratio: 1; object-fit: cover; display: block; background: var(--chip); }
+.imgs .ctx { cursor: zoom-in; }
+.body { padding: 10px 12px 12px; display: flex; flex-direction: column; gap: 8px; }
+.meta { color: var(--muted); font-size: 13px; }
+.guess { font-size: 14px; }
+.guess b { font-size: 16px; }
+.why { color: var(--muted); font-size: 12.5px; }
+.actions { display: flex; flex-wrap: wrap; gap: 6px; }
+.actions button { flex: 1 1 auto; }
+.pick { display: none; flex-direction: column; gap: 8px; border-top: 1px solid var(--line); padding-top: 8px; }
+.pick.open { display: flex; }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.chips button { display: flex; align-items: center; gap: 6px; padding: 4px 10px 4px 4px; min-height: 36px;
+                border-radius: 999px; background: var(--chip); }
+.chips img { width: 26px; height: 26px; border-radius: 50%; object-fit: cover; }
+.newname { display: flex; gap: 6px; }
+.newname input { flex: 1; min-width: 0; font: inherit; padding: 8px 10px; border-radius: 10px;
+                 border: 1px solid var(--line); background: var(--bg); color: var(--ink); }
+.empty { grid-column: 1 / -1; text-align: center; color: var(--muted); padding: 60px 0; }
+#toast { position: fixed; left: 50%; bottom: 18px; transform: translateX(-50%); background: var(--ink);
+         color: var(--bg); padding: 10px 14px; border-radius: 12px; display: none; gap: 12px;
+         align-items: center; max-width: calc(100% - 32px); }
+#toast button { min-height: 32px; padding: 4px 10px; }
+#zoom { position: fixed; inset: 0; background: rgba(0,0,0,.85); display: none; align-items: center;
+        justify-content: center; z-index: 20; cursor: zoom-out; }
+#zoom img { max-width: 96vw; max-height: 92vh; }
+.bar { height: 4px; background: var(--line); border-radius: 2px; width: 140px; overflow: hidden; }
+.bar i { display: block; height: 100%; background: var(--accent); width: 0; }
+@media (max-width: 520px) { main { grid-template-columns: 1fr; } header { position: static; } }
+</style>
+</head>
+<body>
+<header>
+  <div>
+    <h1>Who is this?</h1>
+    <div class="sub" id="counts">loading…</div>
+  </div>
+  <div class="spacer"></div>
+  <select id="dataset" aria-label="Dataset">
+    <option value="real">My photos</option>
+    <option value="demo">Demo family</option>
+  </select>
+  <div id="recheckBox" style="display:flex;align-items:center;gap:8px">
+    <div class="bar" id="bar" hidden><i></i></div>
+    <button class="primary" id="recheck" title="Look for known people again using every face you confirmed">Re-check with what I taught</button>
+  </div>
+</header>
+<div class="people" id="people"></div>
+<main id="faces"></main>
+<div id="toast"><span id="toastText"></span><button id="undoBtn">Undo</button></div>
+<div id="zoom"><img alt=""></div>
+
+<script>
+const $ = (s, el = document) => el.querySelector(s);
+let PEOPLE = [], FACES = [], TOTAL = 0, lastAnswer = null, toastTimer = null;
+const ds = () => $('#dataset').value;
+const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+
+async function api(path, body) {
+  const r = await fetch(path, body ? {method: 'POST', headers: {'Content-Type': 'application/json'},
+                                      body: JSON.stringify(body)} : {});
+  if (!r.ok) throw new Error((await r.json().catch(() => ({}))).detail || r.statusText);
+  return r.json();
+}
+
+async function load() {
+  [PEOPLE, {faces: FACES, total: TOTAL}] = await Promise.all([
+    api(`/api/people?dataset=${ds()}`), api(`/api/faces?dataset=${ds()}&limit=40`)]);
+  render();
+}
+
+function render() {
+  $('#counts').textContent = `${TOTAL} faces to review · ${PEOPLE.length} people known`;
+  $('#people').innerHTML = PEOPLE.map(p =>
+    `<span class="person"><img src="/api/ref/${encodeURIComponent(p.id)}" alt="">${esc(p.name)}
+     <span class="sub">${p.seen}</span></span>`).join('');
+  const main = $('#faces');
+  if (!FACES.length) { main.innerHTML = '<div class="empty">Nothing left to review. 🎉</div>'; return; }
+  main.innerHTML = FACES.map(cardHtml).join('');
+  main.firstElementChild?.classList.add('focus');
+}
+
+function cardHtml(f) {
+  const when = (f.date || '').slice(0, 10);
+  const where = f.album || f.event || '';
+  const guess = f.cand
+    ? `<div class="guess">Muse thinks this might be <b>${esc(f.cand_name || f.cand)}</b>
+         <span class="sub">— ${esc(f.verdict || '?')} ${f.vconf != null ? f.vconf.toFixed(2) : ''}</span></div>
+       <div class="why" dir="auto">${esc(f.vreason)}</div>`
+    : `<div class="guess">Unknown person</div>`;
+  const actions = f.cand
+    ? `<button class="yes" data-act="yes">✓ Yes, ${esc(f.cand_name || 'them')}</button>
+       <button data-act="other">Someone else</button>
+       <button data-act="skip">Skip</button>`
+    : `<button class="primary" data-act="other">Name this person</button>
+       <button data-act="skip">Skip</button>
+       <button data-act="not">Not a real person</button>`;
+  return `<article class="card" data-id="${esc(f.id)}">
+    <div class="imgs">
+      <img src="/api/crop/${encodeURIComponent(f.id)}" alt="face to identify" loading="lazy">
+      <img class="ctx" src="/api/photo/${encodeURIComponent(f.sha)}" alt="the whole photo" loading="lazy">
+    </div>
+    <div class="body">
+      <div class="meta" dir="auto">${esc(when)}${where ? ' · ' + esc(where) : ''}${f.role ? ' · ' + esc(f.role) : ''}</div>
+      ${guess}
+      <div class="actions">${actions}</div>
+      <div class="pick">
+        <div class="chips">${PEOPLE.map(p => `<button data-pid="${esc(p.id)}">
+            <img src="/api/ref/${encodeURIComponent(p.id)}" alt="">${esc(p.name)}</button>`).join('')}</div>
+        <form class="newname"><input placeholder="New person's name" aria-label="New person's name" dir="auto">
+          <button class="primary" type="submit">Add</button></form>
+      </div>
+    </div>
+  </article>`;
+}
+
+async function answer(card, body, label) {
+  card.style.opacity = .4;
+  try {
+    await api('/api/answer', {obs_id: card.dataset.id, ...body});
+    FACES = FACES.filter(f => f.id !== card.dataset.id);
+    TOTAL -= 1;
+    lastAnswer = card.dataset.id;
+    toast(label);
+    if (body.new_name || body.action === 'confirm') PEOPLE = await api(`/api/people?dataset=${ds()}`);
+    if (FACES.length < 10 && TOTAL > FACES.length) return load();
+    render();
+  } catch (e) { card.style.opacity = 1; toast('Error: ' + e.message, false); }
+}
+
+function toast(text, undo = true) {
+  $('#toastText').textContent = text;
+  $('#undoBtn').hidden = !undo;
+  $('#toast').style.display = 'flex';
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => $('#toast').style.display = 'none', 12000);
+}
+
+$('#faces').addEventListener('click', e => {
+  const card = e.target.closest('.card');
+  if (!card) return;
+  const f = FACES.find(x => x.id === card.dataset.id);
+  if (e.target.classList.contains('ctx')) { $('#zoom img').src = e.target.src; $('#zoom').style.display = 'flex'; return; }
+  const btn = e.target.closest('button');
+  if (!btn) return;
+  if (btn.dataset.pid) {
+    const p = PEOPLE.find(x => x.id === btn.dataset.pid);
+    return answer(card, {action: 'confirm', person_id: btn.dataset.pid}, `Saved: ${p ? p.name : ''}`);
+  }
+  switch (btn.dataset.act) {
+    case 'yes': return answer(card, {action: 'confirm', person_id: f.cand}, `Saved: ${f.cand_name}`);
+    case 'other': $('.pick', card).classList.toggle('open'); $('.newname input', card).focus(); return;
+    case 'skip': return answer(card, {action: 'skip'}, 'Skipped');
+    case 'not': return answer(card, {action: 'not_person'}, 'Marked as not a real person');
+  }
+});
+
+$('#faces').addEventListener('submit', e => {
+  e.preventDefault();
+  const card = e.target.closest('.card'), name = $('input', e.target).value.trim();
+  if (name) answer(card, {action: 'confirm', new_name: name}, `Added ${name}`);
+});
+
+$('#undoBtn').addEventListener('click', async () => {
+  if (!lastAnswer) return;
+  await api('/api/undo', {obs_id: lastAnswer});
+  lastAnswer = null; $('#toast').style.display = 'none';
+  load();
+});
+
+$('#zoom').addEventListener('click', () => $('#zoom').style.display = 'none');
+$('#dataset').addEventListener('change', load);
+
+document.addEventListener('keydown', e => {
+  if (e.target.tagName === 'INPUT') return;
+  const card = $('.card.focus');
+  if (!card) return;
+  const key = e.key.toLowerCase();
+  const act = {y: 'yes', n: 'other', s: 'skip'}[key];
+  const btn = act && $(`button[data-act="${act}"]`, card);
+  if (btn) { e.preventDefault(); btn.click(); }
+});
+
+$('#recheck').addEventListener('click', async () => {
+  $('#recheck').disabled = true; $('#bar').hidden = false;
+  let st = await api(`/api/recheck?dataset=${ds()}`, {});
+  while (st.running) {
+    $('#bar i').style.width = (st.total ? 100 * st.done / st.total : 0) + '%';
+    $('#recheck').textContent = `Checking ${st.done}/${st.total}…`;
+    await new Promise(r => setTimeout(r, 1500));
+    st = await api('/api/recheck');
+  }
+  $('#recheck').disabled = false; $('#bar').hidden = true;
+  $('#recheck').textContent = 'Re-check with what I taught';
+  toast(`Re-check done: ${st.matched} recognised, ${st.proposed} new suggestions`, false);
+  load();
+});
+
+load().catch(e => $('#counts').textContent = 'Error: ' + e.message);
+</script>
+</body>
+</html>

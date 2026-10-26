@@ -101,6 +101,16 @@ def test_perceptual_dedup(tmp_path: Path):
     assert keeper.endswith("IMG_20190612_153012.jpg") and dup.endswith("WA0001.jpg")
 
 
+def test_person_crop_grid_and_tiny_faces(tmp_path: Path):
+    from mlg.perceive.crops import person_crop
+    p = tmp_path / "x.png"
+    Image.new("RGB", (2000, 1000), "white").save(p)
+    crop = person_crop(p, "photo", [100, 100, 300, 900], head_only=False)
+    assert crop is not None and crop.size[0] < crop.size[1]   # tall person box stays tall
+    assert person_crop(p, "photo", [100, 100, 105, 110]) is None   # too small to judge
+    assert person_crop(p, "photo", None) is None
+
+
 def test_video_dedup_reencode(tmp_path: Path):
     import subprocess
     src = tmp_path / "frames.png"

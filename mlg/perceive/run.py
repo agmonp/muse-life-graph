@@ -22,6 +22,7 @@ from pathlib import Path
 
 from pydantic import ValidationError
 
+from mlg import identity
 from mlg.config import DATA, ROOT, settings
 from mlg.graph import write as graph_write
 from mlg.graph.db import session
@@ -87,11 +88,12 @@ def build_parts(item: dict, people: list[dict], near: list[dict]) -> tuple[str, 
                            known_people=json.dumps(known, ensure_ascii=False),
                            neighbours=json.dumps(near, ensure_ascii=False, default=str))
     parts: list[chat.Part] = []
-    crops = [p for p in people if p.get("crop") and Path(p["crop"]).exists()][:12]
-    if crops:
+    known_faces = [p for p in people if p.get("crops")][:12]
+    if known_faces:
         parts.append(chat.text("REFERENCE PHOTOS OF KNOWN_PEOPLE (match people in the media against these):"))
-        for p in crops:
-            parts += [chat.text(f"{p['id']} = {p['name']}"), chat.image(p["crop"])]
+        for p in known_faces:
+            parts.append(chat.text(f"{p['id']} = {p['name']}"))
+            parts += [chat.image(c) for c in p["crops"][:2]]
     path = Path(item["path"])
     model = settings().model
     if item["kind"] == "photo":
@@ -140,7 +142,18 @@ def perceive_item(item: dict, people: list[dict], force: bool = False, redo: boo
             p = Perception.model_validate(fill_missing(copy.deepcopy(ans.data), SCHEMA))
     p.media_id = item["sha256"]
     p, notes = review(p, {x["id"] for x in people}, item["kind"])
-    notes += verify(item, p, people)
+    vnotes, candidates = verify(item, p, people)
+    notes += vnotes
+    answers = identity.for_item(item["sha256"])
+    for person in p.people:
+        ans_row = answers.get(person.local_id)
+        if ans_row and ans_row["action"] in ("confirm", "auto") and ans_row["person_id"]:
+            person.known_person_id = ans_row["person_id"]
+            if ans_row["action"] == "confirm":
+                person.confidence = 1.0
+                person.match_rationale = "confirmed by the owner on the Who-is-this screen"
+            else:
+                person.match_rationale = "two-key match after re-check (identify + face verify)"
 
     effective = item["taken_at"]
     est = p.scene.date.estimate
@@ -151,7 +164,8 @@ def perceive_item(item: dict, people: list[dict], force: bool = False, redo: boo
         if item["date_source"] != "upload" or full[:4] <= str(int(item["taken_at"][:4]) - 2):
             effective = full
     with WRITE_LOCK:
-        stats = graph_write.write(item, p, notes, effective)
+        stats = graph_write.write(item, p, notes, effective, candidates,
+                                  {k: v["action"] for k, v in answers.items()})
     OUT.mkdir(parents=True, exist_ok=True)
     out.write_text(json.dumps({"raw": ans.data, "perception": p.model_dump(), "critic_notes": notes,
                                "model": ans.model,
