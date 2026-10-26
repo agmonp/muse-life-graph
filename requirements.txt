@@ -12,4 +12,5 @@ pillow>=10.3
 imagehash>=4.3
 numpy>=1.26
 soundfile>=0.12
+meta-sam-parser>=0.1.0
 pytest>=8.2
