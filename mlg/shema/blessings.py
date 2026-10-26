@@ -48,7 +48,8 @@ ANALYSIS = {
             "properties": {
                 "t0": {"type": "number"}, "t1": {"type": "number"},
                 "text": {"type": "string", "description": "verbatim, original language"},
-                "text_en": {"type": "string", "description": "natural English translation (same as text if English)"},
+                "text_en": {"type": "string", "description": "subtitle line: natural English with proper capitals "
+                                                              "and punctuation (translated if not English)"},
                 "why": {"type": "string"},
             }}},
     },
@@ -58,8 +59,9 @@ SYSTEM = (
     "({relation}). You get the audio and its transcript with turn timings. Pick 1-3 film-worthy "
     "segments: short, clear, emotionally strong lines (a wish, a memory, a laugh, 'I love you') that "
     "can play on their own in a film, 3-15 seconds each. Use the transcript timings for t0/t1 (seconds); "
-    "never cut in the middle of a sentence. Quote the original words exactly and give a natural English "
-    "translation for subtitles. Judge mood only from what you hear. Do not analyse the speaker's "
+    "never cut in the middle of a sentence. Quote the original words exactly in `text`, and write `text_en` as "
+    "a clean subtitle: English, capitalised and punctuated (transcripts have no punctuation), translated if the "
+    "speaker did not speak English. Judge mood only from what you hear. Do not analyse the speaker's "
     "personality.")
 
 

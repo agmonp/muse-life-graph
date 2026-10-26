@@ -19,7 +19,7 @@ from typing import Callable
 
 from mlg.config import DATA
 from mlg.graph.db import session
-from mlg.studio import checker, critic, edit, render
+from mlg.studio import checker, critic, edit, render, sound
 from mlg.studio.plan import plan
 
 FILMS = DATA / "films"
@@ -76,6 +76,33 @@ def record(film_id: str, storyboard: dict, edl: dict, path: Path, scores: dict) 
                  MERGE (sc)-[:HAS_SHOT]->(sh) MERGE (sh)-[:USES]->(mi)""", shots=shots).consume()
 
 
+def sound_up(job: Job, sb: dict, edl: dict, seed: int, version: str) -> None:
+    """Narrator + composer for one cut. Any GPU failure falls back to the placeholder score."""
+    try:
+        t = time.perf_counter()
+        n = sound.narrate(edl, sb["brief"].get("language", "en"))
+        edit.retime(edl)
+        if n:
+            job.say("Narrator", f"voiced {n} narration lines ({version})", "Meta MMS-TTS on the local GPU",
+                    seconds=round(time.perf_counter() - t, 1))
+        first = "score_plan" not in sb
+        t = time.perf_counter()
+        sc = sound.score(sb, edl, seed)
+        if sc:
+            edl["score_path"] = sc["path"]
+            if first:
+                job.say("Sound designer", f"{len(sb['score_plan']['cues'])} music cues", sb["score_plan"]["why"],
+                        cues=[c["prompt"] for c in sb["score_plan"]["cues"]])
+            if sc.get("reused"):
+                job.say("Composer", f"{version} keeps the same score", "the edited cut still fits inside it")
+            else:
+                job.say("Composer", f"score for {version}: {len(sc['cues'])} MusicGen clips, crossfaded",
+                        "Meta MusicGen on the local GPU", seconds=round(time.perf_counter() - t, 1))
+    except Exception as e:  # noqa: BLE001 - a film without the new score is better than no film
+        edl.pop("score_path", None)
+        job.say("Composer", "fell back to the placeholder score", f"{type(e).__name__}: {e}"[:300])
+
+
 def make(request: str, dataset: str = "demo", film_id: str | None = None,
          on_start: Callable[[str], None] | None = None) -> dict:
     film_id = film_id or time.strftime("film_%Y%m%d_%H%M%S")
@@ -103,12 +130,14 @@ def make(request: str, dataset: str = "demo", film_id: str | None = None,
         job.put("storyboard.json", sb)
 
         edl1 = edit.build(sb)
+        seed = int(time.time()) % 1000
+        sound_up(job, sb, edl1, seed, "v1")
         job.put("edl_v1.json", edl1)
         job.say("Editor", f"{len(edl1['shots'])} shots, {edl1['duration']:.0f} s, {edl1['aspect']}",
                 "camera drifts toward the person each scene is about; voices never cut")
         job.say("Renderer", "rendering draft v1 (480p)")
         t = time.perf_counter()
-        v1 = render.render(edl1, job.dir / "v1", 480, seed=int(time.time()) % 1000)
+        v1 = render.render(edl1, job.dir / "v1", 480, seed=seed)
         job.state["versions"]["v1"] = {"path": str(v1), "duration": edl1["duration"]}
         job.say("Renderer", f"draft v1 ready in {time.perf_counter() - t:.0f} s")
 
@@ -119,12 +148,13 @@ def make(request: str, dataset: str = "demo", film_id: str | None = None,
         job.say("Critic", f"v1 scored {c1['score']}/10", c1["summary"])
 
         edl2, applied = critic.apply(copy.deepcopy(edl1), c1)
-        job.put("edl_v2.json", edl2)
         job.state["applied"] = applied
         job.say("Editor", f"applied {len(applied)} of {len(c1['notes'])} notes", "; ".join(applied))
+        sound_up(job, sb, edl2, seed, "v2")
+        job.put("edl_v2.json", edl2)
         job.say("Renderer", "rendering v2 (720p)")
         t = time.perf_counter()
-        v2 = render.render(edl2, job.dir / "v2", 720, seed=int(time.time()) % 1000)
+        v2 = render.render(edl2, job.dir / "v2", 720, seed=seed)
         job.state["versions"]["v2"] = {"path": str(v2), "duration": edl2["duration"]}
         job.say("Renderer", f"v2 ready in {time.perf_counter() - t:.0f} s")
 

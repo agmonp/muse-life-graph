@@ -15,6 +15,7 @@ MIN_STILL = 2.6
 MAX_STILL = 8.0
 MAX_CLIP = 15.0
 VOICE_PAD = 0.35
+NARRATION_LEAD = 0.5   # narration starts this long after its shot begins
 
 
 def _bbox_of(moment: dict, person_id: str | None) -> list[int] | None:
@@ -47,6 +48,9 @@ def retime(edl: dict) -> dict:
     """Recompute starts; voices start 0.4 s into their scene and the scene stretches to fit them."""
     xf = edl["xfade"]
     shots, voices = edl["shots"], edl["voices"]
+    for s in shots:   # a narrated shot holds until the narrator has finished (+ a breath)
+        if s.get("narration"):
+            s["dur"] = round(max(s["dur"], NARRATION_LEAD + s["narration"]["dur"] + 0.8 + xf), 2)
     for _ in range(2):  # second pass after stretching
         t, scene_start = 0.0, {}
         for s in shots:

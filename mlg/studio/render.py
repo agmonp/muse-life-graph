@@ -299,15 +299,25 @@ def _place(track: np.ndarray, clip: np.ndarray, at: float, fade: float = 0.2) ->
     track[a:a + n] += c
 
 
+def _level(clip: np.ndarray, rms: float = 0.11, max_gain: float = 6.0) -> np.ndarray:
+    """Bring every voice source (clip sound, blessing, narrator) to the same loudness."""
+    cur = float(np.sqrt(np.mean(clip ** 2))) if len(clip) else 0.0
+    return clip * min(max_gain, rms / cur) if cur > 1e-4 else clip
+
+
 def render_audio(edl: dict, out: Path, seed: int = 0) -> Path:
+    from mlg.studio.edit import NARRATION_LEAD
     total = edl["duration"]
     n = int(total * SR)
     speech = np.zeros(n, np.float32)
     for s in edl["shots"]:
         if s["kind"] == "clip" and s.get("own_audio"):
-            _place(speech, _pcm(s["path"], s.get("t0", 0), s["dur"]), s["start"])
+            _place(speech, _level(_pcm(s["path"], s.get("t0", 0), s["dur"])), s["start"])
+        if s.get("narration"):
+            _place(speech, _level(_pcm(s["narration"]["path"], 0, s["narration"]["dur"] + 0.1), 0.1),
+                   s["start"] + NARRATION_LEAD, fade=0.05)
     for v in edl["voices"]:
-        _place(speech, _pcm(v["path"], v["t0"], v["t1"] - v["t0"] + 0.3), v["at"])
+        _place(speech, _level(_pcm(v["path"], v["t0"], v["t1"] - v["t0"] + 0.3)), v["at"])
     # duck the music wherever someone speaks (smoothed envelope)
     active = (np.abs(speech) > 0.01).astype(np.float64)
     k = int(0.4 * SR)
@@ -317,11 +327,19 @@ def render_audio(edl: dict, out: Path, seed: int = 0) -> Path:
     hi = np.clip(np.arange(n) + k // 2, 0, n)
     env = ((c[hi] - c[lo]) / k).astype(np.float32)
     gain = 1.0 - 0.78 * np.clip(env * 4, 0, 1)
-    score = music.score(total, edl["music_mood"], seed)[:n]
+    if edl.get("score_path") and Path(edl["score_path"]).exists():
+        # MusicGen score: level it, fade out over the closing card
+        score = _level(_pcm(edl["score_path"], 0, total + 0.5), 0.09, 3.0)[:n]
+        f = min(int(2.5 * SR), len(score) // 3)
+        if f:
+            score[-f:] *= np.linspace(1, 0, f)
+        score_gain = 1.0
+    else:
+        score = music.score(total, edl.get("music_mood", "warm"), seed)[:n]
+        score_gain = 0.5
     mix = np.zeros(n, np.float32)
-    mix[:len(score)] += score * 0.5 * gain[:len(score)]
-    if np.abs(speech).max() > 0:
-        mix += speech / np.abs(speech).max() * 0.9
+    mix[:len(score)] += score * score_gain * gain[:len(score)]
+    mix += speech
     mix /= max(1.0, np.abs(mix).max() / 0.95)
     sf.write(out, mix, SR)
     return out

@@ -22,7 +22,9 @@ SYSTEM = (
     "pacing (photos that linger or rush), repetition (two near-identical pictures), the emotional arc (is the "
     "peak in the right place, does it end on a warm, complete note), captions that are wrong, clumsy or "
     "redundant with the picture, a voice line covered by busy cuts, faces cut off by the frame, a weak first "
-    "or last shot. Be specific and give at most 6 notes, most important first. Each note must name one "
+    "or last shot. A caption marked as spoken by the narrator is the film's narration: judge whether the "
+    "line is good, don't remove it just for describing the picture. "
+    "Be specific and give at most 6 notes, most important first. Each note must name one "
     "shot index and one operation:\n"
     "  shorten / lengthen (set `seconds` = how many seconds to remove/add), drop (remove the shot), "
     "caption (set `new_caption`; null removes the caption), move_earlier / move_later (swap with the "
@@ -59,7 +61,8 @@ def timeline(edl: dict) -> str:
         bits = [f"shot {i}", f"{s['start']:.1f}-{s['start'] + s['dur']:.1f}s", s["kind"], f"scene {s.get('scene')}"]
         for k in ("title", "caption", "year", "text"):
             if s.get(k):
-                bits.append(f"{k}: {s[k]}")
+                spoken = " (also spoken aloud by the narrator)" if k == "caption" and s.get("narration") else ""
+                bits.append(f"{k}{spoken}: {s[k]}")
         if s.get("subtitle"):
             bits.append(f"speech in clip: \"{s['subtitle'][:160]}\"")
         rows.append(" | ".join(str(b) for b in bits))
