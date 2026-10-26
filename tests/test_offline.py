@@ -111,6 +111,44 @@ def test_person_crop_grid_and_tiny_faces(tmp_path: Path):
     assert person_crop(p, "photo", None) is None
 
 
+def _storyboard():
+    ms = {
+        "m1": {"id": "m1", "kind": "photo", "path": "a.jpg", "date": "1995-07-01", "duration": None, "said": [],
+               "faces": [{"id": "person:ruth", "bbox": [100, 100, 400, 900]}]},
+        "m2": {"id": "m2", "kind": "audio", "path": "b.wav", "date": "2025-10-12", "duration": 12.0, "faces": [],
+               "said": [{"id": "u1", "text": "Happy birthday Mom", "t0": 0.1, "t1": 10.1, "speaker": "David"}]},
+        "m3": {"id": "m3", "kind": "photo", "path": "c.jpg", "date": "2025-10-12", "duration": None, "said": [],
+               "faces": []},
+    }
+    script = {"title": "Happy 70th", "subtitle": "x", "closing_card": "Love you", "scenes": [
+        {"order": 1, "moment_ids": ["m1"], "narration": "At the beach", "voice_line_ids": [], "target_sec": 5},
+        {"order": 2, "moment_ids": ["m3", "m2"], "narration": None, "voice_line_ids": ["u1"], "target_sec": 4},
+    ]}
+    return {"brief": {"subject_ids": ["person:ruth"], "aspect": "16:9"}, "script": script, "moments": ms}
+
+
+def test_edit_opens_on_title_and_fits_voice():
+    from mlg.studio import edit
+    e = edit.build(_storyboard())
+    first = e["shots"][0]
+    assert first["kind"] == "title" and first["start"] == 0 and first["title"] == "Happy 70th"
+    assert first["focus"] == [100, 100, 400, 900]           # camera drifts to the honoree
+    v = e["voices"][0]
+    scene2 = [s for s in e["shots"] if s.get("scene") == 2 and s["kind"] != "end"]
+    end_of_scene = scene2[-1]["start"] + scene2[-1]["dur"]
+    assert end_of_scene >= v["at"] + (v["t1"] - v["t0"])   # the voice line never gets cut
+    assert e["shots"][-1]["kind"] == "end" and e["shots"][-1]["text"] == "Love you"
+
+
+def test_subtitle_chunks_cover_the_whole_line():
+    from mlg.studio import render
+    W, H = render.size_for("9:16")
+    text = "Mom, seventy years, and you still dance faster than all of us. Thank you for every Friday dinner."
+    chunks = render.subtitle_chunks(text, 10.0, 20.0, W, H)
+    assert " ".join(c[2] for c in chunks).split() == text.split()
+    assert chunks[0][0] == 10.0 and abs(chunks[-1][1] - 20.0) < 1e-6
+
+
 def test_video_dedup_reencode(tmp_path: Path):
     import subprocess
     src = tmp_path / "frames.png"
