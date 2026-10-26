@@ -76,6 +76,12 @@ video { width: 100%; max-height: 62vh; background: #000; border-radius: 10px; di
       <button class="primary" id="make">Make the film</button>
     </div>
     <div class="films" id="films"></div>
+    <h2 style="margin-top:22px">Ask for blessings</h2>
+    <div class="sub">Family and friends record a blessing from a link; Muse picks the best lines for the film.</div>
+    <div class="row"><select id="bperson" aria-label="Blessings for"></select></div>
+    <input id="bmsg" dir="auto" placeholder="Note for them (optional)" style="width:100%;margin-top:8px;font:inherit;padding:8px 10px;border-radius:10px;border:1px solid var(--line);background:var(--bg);color:var(--ink)">
+    <div class="row"><button id="blink">Create link</button></div>
+    <div id="blessings" class="films"></div>
   </aside>
   <section class="main" id="main"><div class="card empty">Write one sentence and the crew makes the film.</div></section>
 </div>
@@ -190,7 +196,42 @@ $('#make').addEventListener('click', async () => {
   catch (e) { alert(e.message); }
   finally { $('#make').disabled = false; }
 });
+async function loadPeople() {
+  const ppl = await api(`/api/people?dataset=${$('#dataset').value}`);
+  $('#bperson').innerHTML = ppl.map(p => `<option value="${esc(p.id)}">${esc(p.name)}</option>`).join('');
+}
+
+async function loadBlessings() {
+  const reqs = await api('/api/blessing_requests');
+  $('#blessings').innerHTML = reqs.map(r => {
+    const url = `${location.origin}/bless/${r.token}`;
+    const items = r.items.map(it => {
+      const line = it.result && it.result.film_worthy && it.result.film_worthy[0];
+      return `<div class="sub" dir="auto">• ${esc(it.from_name)} (${esc(it.relation || it.kind)}) — ${esc(it.status)}
+        ${line ? `<br>“${esc(line.text_en || line.text)}”` : ''}${it.error ? `<br><span class="err">${esc(it.error)}</span>` : ''}</div>`;
+    }).join('');
+    return `<div class="card" style="padding:10px"><b>For ${esc(r.name)}</b>
+      <div class="row" style="margin-top:4px"><a href="${url}" target="_blank" class="sub" style="word-break:break-all">${url}</a>
+      <button data-copy="${url}" style="min-height:30px;padding:2px 8px">Copy</button></div>${items || '<div class="sub">No blessings yet.</div>'}</div>`;
+  }).join('');
+  if (reqs.some(r => r.items.some(it => !['done', 'failed'].includes(it.status)))) setTimeout(loadBlessings, 3000);
+}
+
+$('#blink').addEventListener('click', async () => {
+  if (!$('#bperson').value) return;
+  await api('/api/blessing_requests', {person_id: $('#bperson').value, dataset: $('#dataset').value, message: $('#bmsg').value});
+  $('#bmsg').value = '';
+  loadBlessings();
+});
+$('#blessings').addEventListener('click', e => {
+  const b = e.target.closest('button[data-copy]');
+  if (b) { navigator.clipboard?.writeText(b.dataset.copy); b.textContent = 'Copied'; }
+});
+$('#dataset').addEventListener('change', loadPeople);
+
 loadFilms();
+loadPeople();
+loadBlessings();
 </script>
 </body>
 </html>

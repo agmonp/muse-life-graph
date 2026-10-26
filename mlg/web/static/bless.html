@@ -1,0 +1,139 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Record a blessing</title>
+<style>
+:root { --bg: #f7f3ee; --card: #ffffff; --ink: #222; --muted: #6f6a64; --line: #e7e0d7;
+        --accent: #c2410c; --accent-ink: #fff; --ok: #2f9e44; }
+@media (prefers-color-scheme: dark) {
+  :root { --bg: #18161a; --card: #222024; --ink: #efebe6; --muted: #a39d96; --line: #34303a;
+          --accent: #fb923c; --accent-ink: #1a1208; --ok: #51cf66; } }
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--ink);
+       font: 16px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif; }
+main { max-width: 520px; margin: auto; padding: 20px 16px 48px; display: flex; flex-direction: column; gap: 16px; }
+.hero { text-align: center; }
+.hero img { width: 112px; height: 112px; border-radius: 50%; object-fit: cover; border: 4px solid var(--card);
+            box-shadow: 0 4px 18px rgba(0,0,0,.12); }
+h1 { font-size: 24px; margin: 10px 0 4px; }
+.he { color: var(--muted); }
+.card { background: var(--card); border: 1px solid var(--line); border-radius: 16px; padding: 16px;
+        display: flex; flex-direction: column; gap: 12px; }
+.rec { width: 112px; height: 112px; border-radius: 50%; border: 0; margin: 4px auto 0; display: grid;
+       place-items: center; background: var(--accent); color: var(--accent-ink); font-size: 16px; font-weight: 600;
+       cursor: pointer; box-shadow: 0 6px 18px rgba(194,65,12,.35); }
+.rec.on { animation: pulse 1.2s infinite; }
+@keyframes pulse { 50% { transform: scale(1.06); } }
+.timer { text-align: center; font-variant-numeric: tabular-nums; color: var(--muted); }
+audio { width: 100%; }
+label { display: flex; flex-direction: column; gap: 4px; font-size: 14px; }
+input[type=text] { font: inherit; padding: 10px 12px; border-radius: 10px; border: 1px solid var(--line);
+                   background: var(--bg); color: var(--ink); }
+.check { flex-direction: row; align-items: flex-start; gap: 10px; }
+.check input { margin-top: 4px; width: 20px; height: 20px; }
+button.send { font: inherit; font-weight: 600; padding: 14px; border-radius: 12px; border: 0;
+              background: var(--accent); color: var(--accent-ink); cursor: pointer; min-height: 48px; }
+button.send:disabled { opacity: .5; }
+.small { font-size: 13px; color: var(--muted); }
+.done { text-align: center; padding: 30px 10px; }
+.err { color: #c92a2a; }
+</style>
+</head>
+<body>
+<main id="app">
+  <div class="hero">
+    <img id="photo" alt="" hidden>
+    <h1 id="title">Record a blessing</h1>
+    <div class="he" id="titleHe" dir="rtl">הקליטו ברכה</div>
+    <p id="message" dir="auto" class="small"></p>
+  </div>
+
+  <section class="card">
+    <button class="rec" id="rec" aria-label="Start recording">● Record<br><span style="font-weight:400;font-size:13px">הקלטה</span></button>
+    <div class="timer" id="timer">Up to 90 seconds · עד 90 שניות</div>
+    <audio id="playback" controls hidden></audio>
+    <div class="small" id="micNote"></div>
+  </section>
+
+  <section class="card">
+    <label>Your name · השם שלך<input type="text" id="name" dir="auto" autocomplete="name"></label>
+    <label>Who are you to them? · מי את/ה בשבילם?<input type="text" id="relation" dir="auto" placeholder="e.g. son, friend, neighbour · למשל: בן, חברה"></label>
+    <label>Photos or videos (optional) · תמונות או סרטונים (לא חובה)<input type="file" id="photos" accept="image/*,video/*" multiple></label>
+    <label class="check"><input type="checkbox" id="consent" checked>
+      <span>My voice may be used in the film. If you uncheck this, only the words are kept.<br>
+        <span class="he" dir="rtl">מותר להשתמש בקול שלי בסרט. בלי הסימון, נשמרות רק המילים.</span></span></label>
+    <button class="send" id="send" disabled>Send · שליחה</button>
+    <div class="small">Your recording is used only for this family's films, and you can ask the family to delete it.
+      <span dir="rtl">ההקלטה משמשת רק לסרטים של המשפחה הזו.</span></div>
+    <div class="err" id="err"></div>
+  </section>
+</main>
+<script>
+const $ = s => document.querySelector(s);
+const token = location.pathname.split('/').pop();
+let recorder = null, chunks = [], blob = null, started = 0, tick = null;
+
+fetch(`/api/bless/${token}`).then(r => r.ok ? r.json() : Promise.reject()).then(info => {
+  $('#title').textContent = `A blessing for ${info.name}`;
+  $('#titleHe').textContent = `ברכה ל${info.name}`;
+  $('#message').textContent = info.message || '';
+  const img = $('#photo'); img.src = `/api/bless/${token}/photo`; img.onload = () => img.hidden = false;
+}).catch(() => { $('#app').innerHTML = '<div class="card done">This link is not active.<br>הקישור אינו פעיל.</div>'; });
+
+function updateSend() { $('#send').disabled = !($('#name').value.trim() && (blob || $('#photos').files.length)); }
+$('#name').addEventListener('input', updateSend);
+$('#photos').addEventListener('change', updateSend);
+
+$('#rec').addEventListener('click', async () => {
+  if (recorder && recorder.state === 'recording') { recorder.stop(); return; }
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({audio: {echoCancellation: true, noiseSuppression: true}});
+    const type = ['audio/webm;codecs=opus', 'audio/mp4', 'audio/webm'].find(t => MediaRecorder.isTypeSupported(t)) || '';
+    recorder = new MediaRecorder(stream, type ? {mimeType: type} : {});
+    chunks = [];
+    recorder.ondataavailable = e => e.data.size && chunks.push(e.data);
+    recorder.onstop = () => {
+      stream.getTracks().forEach(t => t.stop());
+      clearInterval(tick);
+      blob = new Blob(chunks, {type: recorder.mimeType || 'audio/webm'});
+      $('#playback').src = URL.createObjectURL(blob); $('#playback').hidden = false;
+      $('#rec').classList.remove('on');
+      $('#rec').innerHTML = '↺ Again<br><span style="font-weight:400;font-size:13px">שוב</span>';
+      updateSend();
+    };
+    recorder.start();
+    started = Date.now();
+    $('#rec').classList.add('on');
+    $('#rec').innerHTML = '■ Stop<br><span style="font-weight:400;font-size:13px">עצירה</span>';
+    tick = setInterval(() => {
+      const s = Math.floor((Date.now() - started) / 1000);
+      $('#timer').textContent = `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')} / 1:30`;
+      if (s >= 90) recorder.stop();
+    }, 250);
+  } catch (e) {
+    $('#micNote').textContent = 'Microphone not available here. You can still send photos. · אין גישה למיקרופון.';
+  }
+});
+
+$('#send').addEventListener('click', async () => {
+  const fd = new FormData();
+  fd.append('from_name', $('#name').value.trim());
+  fd.append('relation', $('#relation').value.trim());
+  fd.append('consent_film', $('#consent').checked ? 'true' : 'false');
+  if (blob) fd.append('audio', blob, blob.type.includes('mp4') ? 'blessing.m4a' : 'blessing.webm');
+  for (const f of $('#photos').files) fd.append('photos', f, f.name);
+  $('#send').disabled = true; $('#send').textContent = 'Sending… · שולח…';
+  try {
+    const r = await fetch(`/api/bless/${token}`, {method: 'POST', body: fd});
+    if (!r.ok) throw new Error((await r.json().catch(() => ({}))).detail || r.statusText);
+    $('#app').innerHTML = `<div class="card done"><h1>Thank you! 💛</h1><div class="he" dir="rtl">תודה רבה!</div>
+      <p>Your blessing was received and will be part of the film.</p></div>`;
+  } catch (e) {
+    $('#err').textContent = e.message; $('#send').disabled = false; $('#send').textContent = 'Send · שליחה';
+  }
+});
+</script>
+</body>
+</html>

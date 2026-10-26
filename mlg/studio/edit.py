@@ -14,6 +14,7 @@ END_S = 3.5
 MIN_STILL = 2.6
 MAX_STILL = 8.0
 MAX_CLIP = 15.0
+VOICE_PAD = 0.35
 
 
 def _bbox_of(moment: dict, person_id: str | None) -> list[int] | None:
@@ -32,6 +33,14 @@ def _focus(moment: dict, subject_ids: list[str], prefer: str | None = None) -> l
     if faces:
         return max(faces, key=lambda f: abs((f["bbox"][2] - f["bbox"][0]) * (f["bbox"][3] - f["bbox"][1])))["bbox"]
     return None
+
+
+def _line_text(u: dict, language: str) -> str:
+    """Subtitle text: in an English film the English version (translated, and punctuated -
+    raw transcripts have none); in a Hebrew film the original words."""
+    if language == "en" and u.get("text_en"):
+        return u["text_en"]
+    return u.get("text") or ""
 
 
 def retime(edl: dict) -> dict:
@@ -65,6 +74,7 @@ def retime(edl: dict) -> dict:
 def build(storyboard: dict) -> dict:
     brief, script, ms = storyboard["brief"], storyboard["script"], storyboard["moments"]
     subjects = brief.get("subject_ids", [])
+    lang = brief.get("language", "en")
     checks = storyboard.get("picture_check", {})
     shots: list[dict] = []
     voices: list[dict] = []
@@ -98,7 +108,8 @@ def build(storyboard: dict) -> dict:
                 said = [u for u in m["said"] if u["id"] in sc["voice_line_ids"]]
                 t0 = max(0.0, (said[0]["t0"] or 0) - 0.3) if said else 0.0
                 shot.update(dur=round(min((m["duration"] or 5) - t0, MAX_CLIP) + XFADE, 2), t0=t0,
-                            own_audio=True, subtitle=" ".join(u["text"] for u in said) if said else None)
+                            own_audio=True,
+                            subtitle=" ".join(_line_text(u, lang) for u in said) if said else None)
             if si == 0 and k == 0:
                 # frame 0 is the title card on the honoree's picture - never black
                 shots.append({**shot, "kind": "title", "own_audio": False, "subtitle": None, "caption": None,
@@ -113,8 +124,10 @@ def build(storyboard: dict) -> dict:
         for m in audio_only:
             for u in m["said"]:
                 if u["id"] in sc["voice_line_ids"]:
-                    voices.append({"path": m["path"], "t0": u["t0"] or 0, "t1": u["t1"] or (m["duration"] or 0),
-                                   "scene": sc["order"], "text": u["text"], "speaker": u.get("speaker")})
+                    # transcripts give turn-level times only: pad so the first and last words survive
+                    voices.append({"path": m["path"], "t0": max(0.0, (u["t0"] or 0) - VOICE_PAD),
+                                   "t1": min(m["duration"] or 1e9, (u["t1"] or (m["duration"] or 0)) + VOICE_PAD),
+                                   "scene": sc["order"], "text": _line_text(u, lang), "speaker": u.get("speaker")})
     if shots:
         last = shots[-1]
         shots.append({"kind": "end", "moment": last["moment"], "path": last["path"], "focus": last.get("focus"),

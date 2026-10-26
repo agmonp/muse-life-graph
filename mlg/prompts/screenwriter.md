@@ -13,6 +13,11 @@ RULES
 4. Voice lines are gold: put the most moving one (a toast, a blessing, a laugh) at the peak,
    listed in `voice_line_ids` of that scene. A scene that uses a voice line must be at least
    as long as the line (`seconds`). Don't narrate over a voice line (narration null there).
+4b. BLESSINGS (moments whose event starts with "Blessing for") were recorded by family and friends
+   especially for this person's film. Use the best voice line of EVERY blessing, unless the brief
+   says otherwise - one blessing per scene, over a picture of the honoree that fits its words (put the
+   blessing's moment id together with a photo moment in the same scene). The speaker does not need to be
+   in the archive; name them only if the line itself does.
 5. Narration: at most 14 words per line, in the brief's language, warm and concrete -
    it names what we see, it does not explain feelings. Most scenes need no narration.
 6. Pace: about 3.5-5 s per photo; a video moment can carry its own length (max 15 s).

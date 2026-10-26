@@ -21,6 +21,24 @@ def note(shot, op, seconds=None, caption=None):
     return {"t": 1, "shot": shot, "problem": "", "op": op, "seconds": seconds, "new_caption": caption, "why": "x"}
 
 
+def test_subtitles_use_english_version_in_english_film():
+    he = {"text": "אמא, שבעים שנה", "text_en": "Mom, seventy years"}
+    raw = {"text": "you make every room warmer happy birthday", "text_en": "You make every room warmer. Happy birthday!"}
+    assert edit._line_text(he, "en") == "Mom, seventy years"
+    assert edit._line_text(he, "he") == "אמא, שבעים שנה"
+    assert edit._line_text(raw, "en").startswith("You make")
+    assert edit._line_text({"text": "only text"}, "en") == "only text"
+
+
+def test_ducking_envelope_is_fast_and_correct(tmp_path):
+    import time
+    from mlg.studio import render
+    edl = {"duration": 30.0, "shots": [], "voices": [], "music_mood": "warm"}
+    t = time.perf_counter()
+    render.render_audio(edl, tmp_path / "a.wav", seed=1)
+    assert time.perf_counter() - t < 10      # np.convolve over a 0.4 s window took minutes
+
+
 def test_retime_keeps_voice_inside_its_scene():
     e = _edl()
     v = e["voices"][0]

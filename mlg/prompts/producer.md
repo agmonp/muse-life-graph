@@ -13,6 +13,7 @@ in `notes`. Never invent facts about the people.
 - language: "en" or "he" - the language the request is written in.
 - music_mood: warm | joyful | tender | playful | epic.
 - must_include / avoid: concrete wishes from the request ("end with the grandkids").
+  Recorded blessings from friends are welcome material even when the speaker is not in KNOWN_PEOPLE.
 
 KNOWN_PEOPLE: {people}
 MATERIAL: {n_moments} moments ({n_photos} photos, {n_videos} videos, {n_audio} recordings), {span}.

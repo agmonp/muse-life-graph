@@ -242,6 +242,94 @@ def api_recheck_status():
     return RECHECK
 
 
+# ---------------- Blessings (Shema) ----------------
+
+from fastapi import File, Form, UploadFile  # noqa: E402
+
+from mlg.shema import blessings  # noqa: E402
+
+
+class BlessingRequest(BaseModel):
+    person_id: str
+    dataset: str = "demo"
+    message: str = ""
+
+
+@app.post("/api/blessing_requests")
+def api_new_blessing_request(r: BlessingRequest):
+    token = blessings.create_request(r.person_id, r.dataset, r.message.strip())
+    return {"token": token, "url": f"/bless/{token}"}
+
+
+@app.get("/api/blessing_requests")
+def api_blessing_requests():
+    out = blessings.list_requests()
+    names = {p["id"]: p["name"] for p in people.roster()}
+    for r in out:
+        r["name"] = names.get(r["person_id"], r["person_id"])
+        for it in r["items"]:
+            it.pop("path", None)
+    return out
+
+
+@app.get("/bless/{token}")
+def bless_page(token: str):
+    return FileResponse(STATIC / "bless.html")
+
+
+@app.get("/api/bless/{token}")
+def api_bless_info(token: str):
+    info = blessings.request_info(token)
+    if not info or not info["open"]:
+        raise HTTPException(404, "this link is not active")
+    return {"name": info["name"], "relation": info["relation"], "message": info["message"]}
+
+
+@app.get("/api/bless/{token}/photo")
+def api_bless_photo(token: str):
+    info = blessings.request_info(token)
+    if not info or not info.get("crop"):
+        raise HTTPException(404)
+    return FileResponse(info["crop"])
+
+
+def _process_later(item_id: int) -> None:
+    def run():
+        try:
+            blessings.process(item_id)
+        except Exception:  # noqa: BLE001 - status 'failed' is shown on the owner's panel
+            pass
+    threading.Thread(target=run, daemon=True).start()
+
+
+@app.post("/api/bless/{token}")
+async def api_bless_submit(token: str, from_name: str = Form(...), relation: str = Form(""),
+                           consent_film: bool = Form(True), audio: UploadFile | None = File(None),
+                           photos: list[UploadFile] = File(default=[])):
+    if not from_name.strip():
+        raise HTTPException(400, "please write your name")
+    saved = []
+    try:
+        if audio is not None:
+            data = await audio.read()
+            if len(data) > 25 * 1024 * 1024:
+                raise HTTPException(413, "recording too long")
+            if data:
+                saved.append(blessings.save(token, from_name.strip(), relation.strip(), consent_film,
+                                            audio.filename or "blessing.webm", data, "audio"))
+        for ph in photos[:10]:
+            data = await ph.read()
+            if data:
+                kind = "video" if (ph.content_type or "").startswith("video") else "photo"
+                saved.append(blessings.save(token, from_name.strip(), relation.strip(), consent_film,
+                                            ph.filename or "photo.jpg", data, kind))
+    except ValueError as e:
+        raise HTTPException(404, str(e))
+    for item_id in saved:
+        _process_later(item_id)
+    return {"ok": True, "received": len(saved)}
+
+
 # ---------------- Studio / Edit Room ----------------
 
 from mlg.studio.make import FILMS, make  # noqa: E402

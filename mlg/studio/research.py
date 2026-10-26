@@ -22,8 +22,9 @@ def moments(dataset: str = "demo", person_ids: list[str] | None = None) -> list[
             WITH m, mi, faces, collect(DISTINCT {emotion: e.name, intensity: ev.intensity}) AS mood
             OPTIONAL MATCH (u:Utterance)-[:IN]->(mi)
             OPTIONAL MATCH (sp:Person)-[:OBSERVED_AS]->(:Observation)-[:SAID]->(u)
-            WITH m, mi, faces, mood, collect(DISTINCT {id: u.id, text: u.text, t0: u.t0, t1: u.t1,
-                                                       tone: u.tone, speaker: sp.name}) AS said
+            WITH m, mi, faces, mood, collect(DISTINCT {id: u.id, text: u.text, text_en: u.text_en, t0: u.t0,
+                                                       t1: u.t1, tone: u.tone,
+                                                       speaker: coalesce(sp.name, u.speaker_name)}) AS said
             OPTIONAL MATCH (m)-[:FEATURES]->(ob:Object)
             RETURN m.id AS id, m.start AS date, m.date_source AS date_source, m.summary AS summary,
                    m.event_type AS event_type, m.event_title AS event, m.place_type AS place,
@@ -53,5 +54,7 @@ def for_prompt(ms: list[dict]) -> list[dict]:
              "mood": [f"{x['emotion']} {x.get('intensity') or ''}".strip() for x in m["mood"]],
              "objects": m["objects"],
              "voice_lines": [{"id": u["id"], "speaker": u["speaker"], "text": u["text"][:220],
+                              **({"english": u["text_en"][:220]} if u.get("text_en") and u["text_en"] != u["text"]
+                                 else {}),
                               "seconds": round((u["t1"] or 0) - (u["t0"] or 0), 1)} for u in m["said"]]}
             for m in ms]

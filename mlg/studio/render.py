@@ -309,9 +309,13 @@ def render_audio(edl: dict, out: Path, seed: int = 0) -> Path:
     for v in edl["voices"]:
         _place(speech, _pcm(v["path"], v["t0"], v["t1"] - v["t0"] + 0.3), v["at"])
     # duck the music wherever someone speaks (smoothed envelope)
-    active = (np.abs(speech) > 0.01).astype(np.float32)
+    active = (np.abs(speech) > 0.01).astype(np.float64)
     k = int(0.4 * SR)
-    env = np.convolve(active, np.ones(k) / k, mode="same")
+    # centred moving average via a cumulative sum: O(n), where np.convolve was O(n*k) (minutes)
+    c = np.concatenate([[0.0], np.cumsum(active)])
+    lo = np.clip(np.arange(n) - k // 2, 0, n)
+    hi = np.clip(np.arange(n) + k // 2, 0, n)
+    env = ((c[hi] - c[lo]) / k).astype(np.float32)
     gain = 1.0 - 0.78 * np.clip(env * 4, 0, 1)
     score = music.score(total, edl["music_mood"], seed)[:n]
     mix = np.zeros(n, np.float32)
