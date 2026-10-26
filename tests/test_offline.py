@@ -45,6 +45,12 @@ def test_strict_schema_rules():
     _walk(sch, check)
 
 
+def test_strict_schema_keeps_every_model_field():
+    sch = strict_schema()
+    eg = sch["properties"]["scene"]["properties"]["event_guess"]
+    assert set(eg["required"]) == {"type", "title", "rationale", "confidence"}
+
+
 def test_schema_accepts_minimal_perception():
     ev = {"bbox": [10, 10, 500, 900], "t": None, "frame": None, "cue": "smiling"}
     data = {

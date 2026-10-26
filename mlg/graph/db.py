@@ -30,8 +30,10 @@ def driver() -> Driver:
         # Windows' local root store may lack the CA AuraDB uses (SSL.com), so verify
         # against certifi's bundle instead of the "+s" scheme's system default.
         return GraphDatabase.driver(f"{scheme[:-2]}://{rest}", auth=(s.neo4j_user, s.neo4j_password),
-                                    encrypted=True, trusted_certificates=TrustCustomCAs(certifi.where()))
-    return GraphDatabase.driver(s.neo4j_uri, auth=(s.neo4j_user, s.neo4j_password))
+                                    encrypted=True, trusted_certificates=TrustCustomCAs(certifi.where()),
+                                    notifications_min_severity="OFF")
+    return GraphDatabase.driver(s.neo4j_uri, auth=(s.neo4j_user, s.neo4j_password),
+                                notifications_min_severity="OFF")
 
 
 @contextmanager

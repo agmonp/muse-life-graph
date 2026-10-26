@@ -4,6 +4,8 @@ __pycache__/
 .pytest_cache/
 .env
 data/media/
+data/demo/
+data/perceptions/
 data/cache/
 data/renders/
 data/audio/

@@ -141,6 +141,21 @@ def ask(parts: list[Part], *, system: str | None = None, model: str | None = Non
     if use_cache and (hit := cache.get(key)):
         return Answer(**hit, cached=True)
 
+    # Strict schema still yields malformed JSON now and then (seen in testing);
+    # a fresh attempt nearly always fixes it, and bad replies are never cached.
+    for attempt in range(3):
+        try:
+            answer = _call(parts, system, model, schema, schema_name, effort, max_tokens, provider, use_responses)
+            break
+        except json.JSONDecodeError:
+            if attempt == 2:
+                raise
+    cache.put(key, {"text": answer.text, "data": answer.data, "usage": answer.usage,
+                    "model": answer.model, "seconds": answer.seconds})
+    return answer
+
+
+def _call(parts, system, model, schema, schema_name, effort, max_tokens, provider, use_responses) -> Answer:
     if use_responses:
         body: dict[str, Any] = {
             "model": model,
@@ -176,6 +191,4 @@ def ask(parts: list[Part], *, system: str | None = None, model: str | None = Non
                     seconds=round(reply.seconds, 2))
     if schema:
         answer.data = _json_from(out)
-    cache.put(key, {"text": answer.text, "data": answer.data, "usage": answer.usage,
-                    "model": answer.model, "seconds": answer.seconds})
     return answer

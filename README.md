@@ -37,6 +37,22 @@ Copy-Item .env.example .env   # then fill in keys
 .\.venv\Scripts\python.exe -m mlg.graph.db             # needs NEO4J_* in .env
 ```
 
+## Phase 2 (built 2026-10-26): perceive -> graph
+
+| Module | What it does |
+|---|---|
+| `mlg/people.py` | Known people with reference crops (`python -m mlg.people add/list`) |
+| `mlg/perceive/run.py` | One Muse call per item: rules prompt + known people's reference photos + same-day moments + the media. Photos as images, videos as keyframes + audio track, audio as audio + diarized transcript |
+| `mlg/perceive/critic.py` | Code-enforced rules: drop claims without evidence, cap inferred confidence, cap voice-only identities and turn them into questions |
+| `mlg/graph/write.py` | Idempotent per-item sub-graph: MediaItem, Moment, Observations, Objects, Activities, Utterances, typed edges with evidence |
+| `scripts/make_demo_set.py` | A fictional family generated with Muse Image (consistent faces from one reference photo) |
+
+```powershell
+.\.venv\Scripts\python.exe scripts\make_demo_set.py
+.\.venv\Scripts\python.exe -m mlg.ingest.scan data\demo
+.\.venv\Scripts\python.exe -m mlg.perceive.run --workers 6
+```
+
 ## License
 
 Apache-2.0

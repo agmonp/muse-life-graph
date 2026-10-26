@@ -128,7 +128,9 @@ def _inline(node, defs):
     if isinstance(node, dict):
         if "$ref" in node:
             return _inline(copy.deepcopy(defs[node["$ref"].split("/")[-1]]), defs)
-        out = {k: _inline(v, defs) for k, v in node.items() if k not in ("title", "default")}
+        # drop schema metadata keys, but never a property that happens to be named "title"
+        out = {k: (_inline_props(v, defs) if k == "properties" else _inline(v, defs))
+               for k, v in node.items() if k not in ("title", "default")}
         if out.get("type") == "object" and "properties" in out:
             out["additionalProperties"] = False
             out["required"] = list(out["properties"])
@@ -136,6 +138,37 @@ def _inline(node, defs):
     if isinstance(node, list):
         return [_inline(v, defs) for v in node]
     return node
+
+
+def _empty(sch: dict):
+    types = [sch.get("type")] + [a.get("type") for a in sch.get("anyOf", [])]
+    if "null" in types:
+        return None
+    return {"string": "", "array": [], "number": 0.0, "integer": 0, "boolean": False,
+            "object": {}}.get(types[0], None)
+
+
+def fill_missing(data, sch: dict):
+    """Add keys the model left out (strict mode is not always enforced server-side).
+
+    Nullable keys become null, others an empty value of their type; nested
+    objects and array items are filled the same way.
+    """
+    if "anyOf" in sch and isinstance(data, dict):
+        sch = next((a for a in sch["anyOf"] if a.get("type") == "object"), sch)
+    if sch.get("type") == "object" and isinstance(data, dict):
+        for key, sub in sch.get("properties", {}).items():
+            if key not in data:
+                data[key] = fill_missing(_empty(sub), sub) if sub.get("type") == "object" else _empty(sub)
+            else:
+                data[key] = fill_missing(data[key], sub)
+    elif sch.get("type") == "array" and isinstance(data, list):
+        data = [fill_missing(x, sch.get("items", {})) for x in data]
+    return data
+
+
+def _inline_props(props: dict, defs) -> dict:
+    return {name: _inline(sub, defs) for name, sub in props.items()}
 
 
 def strict_schema(model: type[BaseModel] = Perception) -> dict:
