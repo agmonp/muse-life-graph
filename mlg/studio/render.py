@@ -104,7 +104,7 @@ def overlay_for(shot: dict, W: int, H: int) -> np.ndarray | None:
         layer = Image.alpha_composite(dim, layer)
         if shot.get("text"):
             _text_block(layer, shot["text"], font("bold", int(short * 0.085)), H // 2, int(W * 0.84))
-    return np.asarray(layer, dtype=np.float32) / 255.0
+    return layer
 
 
 def _sub_font(W: int, H: int):
@@ -125,7 +125,7 @@ def subtitle_chunks(text: str, a0: float, a1: float, W: int, H: int) -> list[tup
     return out
 
 
-def subtitle_layer(text: str, W: int, H: int) -> np.ndarray:
+def subtitle_layer(text: str, W: int, H: int) -> Image.Image:
     layer = Image.new("RGBA", (W, H), (0, 0, 0, 0))
     f = _sub_font(W, H)
     d = ImageDraw.Draw(layer)
@@ -139,15 +139,39 @@ def subtitle_layer(text: str, W: int, H: int) -> np.ndarray:
         d.rounded_rectangle((x - 10, y + y0 - 6, x + (x1 - x0) + 10, y + y1 + 6), 8, fill=(0, 0, 0, 150))
         d.text((x, y), vis, font=f, fill=(255, 255, 255, 255))
         y += lh
-    return np.asarray(layer, dtype=np.float32) / 255.0
+    return layer
+
+
+class Overlay:
+    """An RGBA layer split once into colour + alpha, so fading it in is a cheap C-level paste."""
+
+    def __init__(self, layer: Image.Image):
+        self.rgb = layer.convert("RGB")
+        self.alpha = layer.getchannel("A")
+        self._faded: dict[int, Image.Image] = {}
+
+    def paste_on(self, frame: Image.Image, strength: float) -> None:
+        level = int(round(max(0.0, min(1.0, strength)) * 20))   # 21 fade steps are smooth at 25 fps
+        if level == 0:
+            return
+        if level not in self._faded:
+            self._faded[level] = self.alpha if level == 20 else self.alpha.point(lambda v: v * level // 20)
+        frame.paste(self.rgb, (0, 0), self._faded[level])
+
+
+VIDEO_EXT = (".mp4", ".mov", ".m4v", ".avi", ".mkv", ".3gp")
 
 
 class Still:
     def __init__(self, shot: dict, W: int, H: int, index: int):
         path = Path(shot["path"])
-        img = open_image(path) if shot.get("source") != "video" and path.suffix.lower() not in (
-            ".mp4", ".mov", ".m4v", ".avi", ".mkv", ".3gp") else open_image(keyframes(path)[len(keyframes(path)) // 2][1])
-        img.thumbnail((int(max(W, H) * 1.8), int(max(W, H) * 1.8)))
+        img = (open_image(keyframes(path)[len(keyframes(path)) // 2][1]) if path.suffix.lower() in VIDEO_EXT
+               else open_image(path))
+        iw, ih = img.size
+        # shrink once to what the deepest zoom needs, so each frame resamples a small image
+        scale = min(1.0, W * 1.25 / min(iw, ih * W / H))
+        if scale < 1.0:
+            img = img.resize((max(1, int(iw * scale)), max(1, int(ih * scale))), Image.LANCZOS)
         self.img, self.W, self.H, self.dur = img, W, H, shot["dur"]
         iw, ih = img.size
         bw = min(iw, ih * W / H)
@@ -161,7 +185,7 @@ class Still:
         # alternate zoom in / zoom out so consecutive stills don't feel the same
         self.z0, self.z1 = (1.0, 1.16) if index % 2 == 0 else (1.16, 1.0)
 
-    def frame(self, t: float) -> np.ndarray:
+    def frame(self, t: float) -> Image.Image:
         p = min(1.0, max(0.0, t / max(self.dur, 0.01)))
         p = p * p * (3 - 2 * p)
         z = self.z0 + (self.z1 - self.z0) * p
@@ -172,8 +196,7 @@ class Still:
         cy = ih / 2 + (self.focus[1] - ih / 2) * (0.35 + 0.65 * p) if self.H <= self.W else self.focus[1]
         x0 = min(max(0, cx - w / 2), iw - w)
         y0 = min(max(0, cy - h / 2), ih - h)
-        crop = self.img.resize((self.W, self.H), Image.BILINEAR, box=(x0, y0, x0 + w, y0 + h))
-        return np.asarray(crop, dtype=np.float32) / 255.0
+        return self.img.resize((self.W, self.H), Image.BILINEAR, box=(x0, y0, x0 + w, y0 + h))
 
 
 class Clip:
@@ -184,18 +207,18 @@ class Clip:
              "-t", f"{shot['dur']:.2f}", "-vf",
              f"scale={W}:{H}:force_original_aspect_ratio=increase,crop={W}:{H},fps={FPS}",
              "-f", "rawvideo", "-pix_fmt", "rgb24", "-"], stdout=subprocess.PIPE)
-        self.last = np.zeros((H, W, 3), np.float32)
+        self.last = Image.new("RGB", (W, H))
         self.read = 0
 
-    def frame(self, t: float) -> np.ndarray:
+    def frame(self, t: float) -> Image.Image:
         want = int(t * FPS)
         while self.read <= want:
             buf = self.proc.stdout.read(self.W * self.H * 3)
             self.read += 1
             if len(buf) < self.W * self.H * 3:
                 break
-            self.last = np.frombuffer(buf, np.uint8).reshape(self.H, self.W, 3).astype(np.float32) / 255.0
-        return self.last
+            self.last = Image.frombytes("RGB", (self.W, self.H), buf)
+        return self.last.copy()
 
     def close(self) -> None:
         self.proc.kill()
@@ -213,7 +236,7 @@ def render_video(edl: dict, out: Path, height: int = 720) -> Path:
     subs = [(v["at"], v["at"] + v["t1"] - v["t0"], v["text"]) for v in edl["voices"]]
     subs += [(s["start"] + 0.2, s["start"] + s["dur"] - 0.3, s["subtitle"]) for s in shots if s.get("subtitle")]
     subs = [c for a0, a1, txt in subs for c in subtitle_chunks(txt, a0, a1, W, H)]
-    sub_layers = {txt: subtitle_layer(txt, W, H) for _, _, txt in subs}
+    sub_layers = {txt: Overlay(subtitle_layer(txt, W, H)) for _, _, txt in subs}
     enc = subprocess.Popen([shutil.which("ffmpeg"), "-y", "-v", "error", "-f", "rawvideo", "-pix_fmt", "rgb24",
                             "-s", f"{W}x{H}", "-r", str(FPS), "-i", "-", "-c:v", "libx264", "-preset", "veryfast",
                             "-crf", "20", "-pix_fmt", "yuv420p", str(out)], stdin=subprocess.PIPE)
@@ -231,25 +254,23 @@ def render_video(edl: dict, out: Path, height: int = 720) -> Path:
                     continue
                 if i not in live:
                     src = Clip(s, W, H) if s["kind"] == "clip" else Still(s, W, H, i)
-                    live[i] = (src, overlay_for(s, W, H))
+                    layer = overlay_for(s, W, H)
+                    live[i] = (src, Overlay(layer) if layer is not None else None)
                 src, ov = live[i]
                 local = t - s["start"]
                 img = src.frame(local)
                 if ov is not None:
-                    a = ov[..., 3:] * (1.0 if s["kind"] == "title" and local < s["dur"] - 0.6
-                                       else _alpha_at(local, s["dur"]))
-                    img = img * (1 - a) + ov[..., :3] * a
+                    ov.paste_on(img, 1.0 if s["kind"] == "title" and local < s["dur"] - 0.6
+                                else _alpha_at(local, s["dur"]))
                 # crossfade: the later shot fades in over the earlier one (first shot: no fade - frame 0 is the title)
                 w = 1.0 if i == 0 or local >= xf else local / xf
-                frame = img if frame is None else frame * (1 - w) + img * w
+                frame = img if frame is None or w >= 1.0 else Image.blend(frame, img, w)
             if frame is None:
-                frame = np.zeros((H, W, 3), np.float32)
+                frame = Image.new("RGB", (W, H))
             for a0, a1, txt in subs:
                 if a0 <= t < a1:
-                    ov = sub_layers[txt]
-                    a = ov[..., 3:] * _alpha_at(t - a0, a1 - a0, 0.25)
-                    frame = frame * (1 - a) + ov[..., :3] * a
-            enc.stdin.write((np.clip(frame, 0, 1) * 255).astype(np.uint8).tobytes())
+                    sub_layers[txt].paste_on(frame, _alpha_at(t - a0, a1 - a0, 0.25))
+            enc.stdin.write(frame.tobytes())
     finally:
         for src, _ in live.values():
             if isinstance(src, Clip):
