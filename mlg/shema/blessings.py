@@ -44,9 +44,10 @@ ANALYSIS = {
         "mood": {"type": "string", "enum": list(EMOTIONS)},
         "film_worthy": {"type": "array", "items": {
             "type": "object", "additionalProperties": False,
-            "required": ["t0", "t1", "text", "text_en", "why"],
+            "required": ["turns", "text", "text_en", "why"],
             "properties": {
-                "t0": {"type": "number"}, "t1": {"type": "number"},
+                "turns": {"type": "array", "items": {"type": "integer"},
+                          "description": "consecutive turn numbers from the transcript that make up the line"},
                 "text": {"type": "string", "description": "verbatim, original language"},
                 "text_en": {"type": "string", "description": "subtitle line: natural English with proper capitals "
                                                               "and punctuation (translated if not English)"},
@@ -56,10 +57,10 @@ ANALYSIS = {
 }
 SYSTEM = (
     "You listen to a short recorded blessing for {name} ({relation_of}), recorded by {speaker} "
-    "({relation}). You get the audio and its transcript with turn timings. Pick 1-3 film-worthy "
-    "segments: short, clear, emotionally strong lines (a wish, a memory, a laugh, 'I love you') that "
-    "can play on their own in a film, 3-15 seconds each. Use the transcript timings for t0/t1 (seconds); "
-    "never cut in the middle of a sentence. Quote the original words exactly in `text`, and write `text_en` as "
+    "({relation}). You get the audio and its transcript split into numbered turns at the speaker's pauses. "
+    "Pick 1-3 film-worthy lines: short, clear, emotionally strong (a wish, a memory, a laugh, 'I love you') "
+    "that can play on their own in a film, 3-15 seconds each. Each line is one or more CONSECUTIVE whole "
+    "turns (list their numbers) - never part of a turn. Quote those turns' words exactly in `text`, and write `text_en` as "
     "a clean subtitle: English, capitalised and punctuated (transcripts have no punctuation), translated if the "
     "speaker did not speak English. Judge mood only from what you hear. Do not analyse the speaker's "
     "personality.")
@@ -156,14 +157,24 @@ def process(item_id: int) -> dict:
         wav = Path(it["path"]).with_suffix(".wav")
         if not wav.exists():
             shutil.copy(to_wav(Path(it["path"]), 16000), wav)
-        tr = transcribe(wav, languages=["Hebrew", "English"])
+        # ENDPOINTING splits at pauses, so every turn has real start/end times - lines are whole turns
+        tr = transcribe(wav, mode="ENDPOINTING", languages=["Hebrew", "English"])
+        turns = tr.turns or []
+        listing = "\n".join(f"turn {i}: [{t.start_ms / 1000:.1f}-{t.end_ms / 1000:.1f}s] {t.text}"
+                            for i, t in enumerate(turns, 1)) or tr.text
         _set(item_id, status="listening")
         system = SYSTEM.format(name=info["name"], relation_of=info["relation"] or "the honoree",
                                speaker=it["from_name"] or "a guest", relation=it["relation"] or "guest")
-        ans = chat.ask([chat.text("Transcript:\n" + (tr.as_lines() or tr.text)), chat.audio(wav)],
+        ans = chat.ask([chat.text("Transcript:\n" + listing), chat.audio(wav)],
                        system=system, model=settings().audio_model, schema=ANALYSIS, schema_name="blessing",
                        max_tokens=6000)
         res = ans.data
+        for line in res["film_worthy"]:
+            picked = [turns[i - 1] for i in line["turns"] if 0 < i <= len(turns)]
+            if picked:
+                line["t0"], line["t1"] = picked[0].start_ms / 1000, picked[-1].end_ms / 1000
+            else:   # no turn timing (very short audio): the whole recording
+                line["t0"], line["t1"] = 0.0, tr.duration_ms / 1000
         res["transcript"] = tr.text
         res["duration_s"] = tr.duration_ms / 1000
         _write_graph(it, info, wav, res)

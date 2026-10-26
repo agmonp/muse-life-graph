@@ -15,12 +15,19 @@ import os
 import sys
 import time
 
+from pathlib import Path
+
 import numpy as np
 import soundfile as sf
 import torch
 
-MUSIC_MODEL = os.environ.get("MUSICGEN_MODEL", "facebook/musicgen-small")   # or musicgen-medium
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+from mlg.studio.textnorm import phrases, spell_numbers  # noqa: E402  (pure Python, no project deps)
+
+# medium: 23 s vs 18 s for small on a 5070 Ti for a 27 s two-cue score; set MUSICGEN_MODEL to switch
+MUSIC_MODEL = os.environ.get("MUSICGEN_MODEL") or "facebook/musicgen-medium"
 XFADE_S = 3.0
+BATCH = 2
 _cache: dict = {}
 
 
@@ -53,12 +60,16 @@ def music(job: dict) -> dict:
     sr = model.config.audio_encoder.sampling_rate
     cues = job["cues"]
     torch.manual_seed(int(job.get("seed", 0)))
-    longest = max(c["seconds"] for c in cues) + XFADE_S
-    inputs = proc(text=[c["prompt"] for c in cues], padding=True, return_tensors="pt").to(_device())
-    with torch.no_grad():
-        out = model.generate(**inputs, do_sample=True, guidance_scale=3.0,
-                             max_new_tokens=int(min(longest, 30) * model.config.audio_encoder.frame_rate))
-    clips = [out[i, 0].float().cpu().numpy() for i in range(len(cues))]
+    clips = []
+    # two cues per batch: five 26 s medium clips in one batch took ~300 s (VRAM spill), pairs ~25 s each
+    for i in range(0, len(cues), BATCH):
+        group = cues[i:i + BATCH]
+        longest = max(c["seconds"] for c in group) + XFADE_S
+        inputs = proc(text=[c["prompt"] for c in group], padding=True, return_tensors="pt").to(_device())
+        with torch.no_grad():
+            out = model.generate(**inputs, do_sample=True, guidance_scale=3.0,
+                                 max_new_tokens=int(min(longest, 30) * model.config.audio_encoder.frame_rate))
+        clips += [out[k, 0].float().cpu().numpy() for k in range(len(group))]
     x = int(XFADE_S * sr)
     score = np.zeros(0, np.float32)
     for c, clip in zip(cues, clips):
@@ -74,14 +85,49 @@ def music(job: dict) -> dict:
     return {"out": job["out"], "seconds": round(len(score) / sr, 2), "sr": sr}
 
 
+def _seamless():
+    if "seamless" not in _cache:
+        from transformers import AutoProcessor, SeamlessM4Tv2ForTextToSpeech
+        name = "facebook/seamless-m4t-v2-large"
+        model = SeamlessM4Tv2ForTextToSpeech.from_pretrained(
+            name, torch_dtype=torch.float16 if _device() == "cuda" else torch.float32).to(_device())
+        _cache["seamless"] = (AutoProcessor.from_pretrained(name), model)
+    return _cache["seamless"]
+
+
+def tts_seamless(job: dict) -> dict:
+    """SeamlessM4T v2 text-to-speech: one pass per sentence, natural prosody, 16 kHz."""
+    proc, model = _seamless()
+    lang = job.get("lang", "eng")
+    sr = 16000
+    pause = np.zeros(int(sr * 0.25), np.float32)
+    pieces = []
+    import re
+    for sent in [s for s in re.split(r"(?<=[.!?])\s+", spell_numbers(job["text"]).strip()) if s]:
+        inputs = proc(text=sent, src_lang=lang, return_tensors="pt").to(_device())
+        torch.manual_seed(int(job.get("seed", 0)))
+        with torch.no_grad():
+            wav = model.generate(**inputs, tgt_lang=lang, speaker_id=int(job.get("speaker", 4)))[0]
+        pieces += [wav.float().cpu().numpy().squeeze(), pause]
+    wav = np.concatenate(pieces[:-1])
+    sf.write(job["out"], wav / max(1e-6, float(np.abs(wav).max())) * 0.9, sr)
+    return {"out": job["out"], "seconds": round(len(wav) / sr, 2), "sr": sr}
+
+
 def tts(job: dict) -> dict:
+    if job.get("engine") == "seamless":
+        return tts_seamless(job)
     tok, model = _tts(job.get("lang", "eng"))
-    inputs = tok(job["text"], return_tensors="pt").to(_device())
-    model.speaking_rate = float(job.get("rate", 0.95))
-    torch.manual_seed(int(job.get("seed", 0)))
-    with torch.no_grad():
-        wav = model(**inputs).waveform[0].float().cpu().numpy()
+    model.speaking_rate = float(job.get("rate", 0.92))
     sr = model.config.sampling_rate
+    pause = np.zeros(int(sr * 0.22), np.float32)
+    pieces = []
+    for i, phrase in enumerate(phrases(job["text"]) or [job["text"]]):
+        torch.manual_seed(int(job.get("seed", 0)) + i)
+        inputs = tok(phrase, return_tensors="pt").to(_device())
+        with torch.no_grad():
+            pieces += [model(**inputs).waveform[0].float().cpu().numpy(), pause]
+    wav = np.concatenate(pieces[:-1]) if pieces else np.zeros(sr // 2, np.float32)
     sf.write(job["out"], wav / max(1e-6, float(np.abs(wav).max())) * 0.9, sr)
     return {"out": job["out"], "seconds": round(len(wav) / sr, 2), "sr": sr}
 

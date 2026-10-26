@@ -39,6 +39,34 @@ def test_ducking_envelope_is_fast_and_correct(tmp_path):
     assert time.perf_counter() - t < 10      # np.convolve over a 0.4 s window took minutes
 
 
+def test_narration_text_normalization():
+    from mlg.studio.textnorm import phrases, spell_numbers
+    assert spell_numbers("Happy 70th, Ruth") == "Happy seventieth, Ruth"
+    assert spell_numbers("in 2012 and 1995") == "in twenty twelve and nineteen ninety five"
+    assert spell_numbers("21st") == "twenty first" and spell_numbers("2005") == "twenty oh five"
+    assert phrases("Seventy candles, one big breath - and everyone laughing.") == [
+        "Seventy candles", "one big breath", "and everyone laughing"]
+
+
+def test_voice_never_overlaps_a_talking_clip():
+    shots = [
+        {"kind": "title", "scene": 1, "dur": 6.0, "moment": "a"},
+        {"kind": "still", "scene": 2, "dur": 4.0, "moment": "b"},
+        {"kind": "clip", "scene": 2, "dur": 10.0, "moment": "c", "own_audio": True, "subtitle": "speech"},
+        {"kind": "end", "scene": 2, "dur": 3.5, "moment": "c"},
+    ]
+    e = edit.retime({"shots": shots, "voices": [{"scene": 2, "t0": 0.0, "t1": 7.0, "text": "x", "path": "v"}],
+                     "xfade": 0.5})
+    v, clip = e["voices"][0], e["shots"][2]
+    assert v["at"] + 7.0 <= clip["start"]          # the blessing ends before the clip's own sound starts
+
+
+def test_no_caption_on_a_clip_with_speech():
+    e = _edl()
+    e2, done = critic.apply(e, {"notes": [note(3, "caption", caption="Mom, seventy years...")]})
+    assert not e2["shots"][3].get("caption") and done == []
+
+
 def test_retime_keeps_voice_inside_its_scene():
     e = _edl()
     v = e["voices"][0]

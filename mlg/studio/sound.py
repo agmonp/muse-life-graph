@@ -25,6 +25,8 @@ WORKER = ROOT / "mlg" / "studio" / "gpu_worker.py"
 OUT = CACHE / "sound"
 MAX_CUE = 26.0
 SCORE_MARGIN = 8.0   # compose a little longer than the cut, so the critic's changes still fit
+# narrator: SeamlessM4T v2 - 5% word errors vs 16.5% for MMS-TTS (scripts/voice_eval.py, Voice Transcribe as judge)
+NARRATOR = {"engine": "seamless", "speaker": 4}
 
 CUE_SCHEMA = {
     "type": "object", "additionalProperties": False, "required": ["cues", "why"],
@@ -109,7 +111,8 @@ def score(storyboard: dict, edl: dict, seed: int = 0) -> dict | None:
     plan = storyboard.get("score_plan") or design(storyboard, edl)
     storyboard["score_plan"] = plan
     cues = _cue_times(plan["cues"], {**edl, "duration": edl["duration"] + SCORE_MARGIN})
-    key = hashlib.sha1(json.dumps([cues, seed, os.environ.get("MUSICGEN_MODEL", "")]).encode()).hexdigest()[:16]
+    model = os.environ.get("MUSICGEN_MODEL") or "facebook/musicgen-medium"
+    key = hashlib.sha1(json.dumps([cues, seed, model]).encode()).hexdigest()[:16]
     out = OUT / f"score_{key}.wav"
     res = _run([{"type": "music", "cues": cues, "out": str(out), "seed": seed}])[0]
     storyboard["score_last"] = {"path": str(out), "cues": cues, "why": plan["why"], "seconds": res["seconds"]}
@@ -118,18 +121,25 @@ def score(storyboard: dict, edl: dict, seed: int = 0) -> dict | None:
 
 def narrate(edl: dict, language: str = "en") -> int:
     """Voice every caption (the scene narration) and make each shot long enough to hold it."""
-    if not _gpu_ready():
+    if not _gpu_ready() or language != "en":
+        # no reliable Hebrew voice yet (Seamless has no Hebrew speech, MMS-heb is garbled):
+        # Hebrew films keep the narration as on-screen text only
+        for s in edl["shots"]:
+            s.pop("narration", None)
         return 0
-    lang = "heb" if language == "he" else "eng"
     jobs, shots = [], []
+    voiced = [(v["at"], v["at"] + v["t1"] - v["t0"]) for v in edl["voices"]]
     for s in edl["shots"]:
         text = s.get("caption")
-        if not text or s["kind"] not in ("still", "clip"):
+        talking = (s["kind"] == "clip" and s.get("own_audio")) or any(
+            a < s["start"] + s["dur"] and s["start"] < b for a, b in voiced)
+        if not text or s["kind"] not in ("still", "clip") or talking:
+            # never narrate over someone who is already speaking (a clip's sound or a blessing)
             s.pop("narration", None)
             continue
-        key = hashlib.sha1(f"{lang}|{text}".encode()).hexdigest()[:16]
+        key = hashlib.sha1(f"{NARRATOR}|{text}".encode()).hexdigest()[:16]
         out = OUT / f"narr_{key}.wav"
-        jobs.append({"type": "tts", "text": text, "lang": lang, "out": str(out)})
+        jobs.append({"type": "tts", "text": text, "lang": "eng", "out": str(out), **NARRATOR})
         shots.append(s)
     for s, res in zip(shots, _run(jobs)):
         s["narration"] = {"path": res["out"], "dur": round(res["seconds"], 2)}

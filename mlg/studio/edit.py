@@ -57,17 +57,25 @@ def retime(edl: dict) -> dict:
             s["start"] = round(t, 3)
             scene_start.setdefault(s.get("scene"), t)
             t += s["dur"] - xf
-        for v in voices:
-            v["at"] = round(scene_start.get(v["scene"], 0.0) + 0.4, 2)
         stretched = False
         for v in voices:
-            end = v["at"] + (v["t1"] - v["t0"]) + 0.6
             scene_shots = [s for s in shots if s.get("scene") == v["scene"] and s["kind"] != "end"]
             if not scene_shots:
+                v["at"] = round(scene_start.get(v["scene"], 0.0) + 0.4, 2)
                 continue
-            last = scene_shots[-1]
-            if last["start"] + last["dur"] - xf < end:
-                last["dur"] = round(end - last["start"] + xf, 2)
+            talk = next((k for k, s in enumerate(scene_shots) if s["kind"] == "clip" and s.get("own_audio")), None)
+            if talk == 0:
+                # the scene opens on a talking clip: the voice line waits until the clip is over
+                clip = scene_shots[0]
+                v["at"] = round(clip["start"] + clip["dur"] - xf + 0.2, 2)
+                holder = scene_shots[-1] if len(scene_shots) > 1 else clip
+            else:
+                v["at"] = round(scene_start[v["scene"]] + 0.4, 2)
+                # the voice must be over before a talking clip starts, so stretch the shot before it
+                holder = scene_shots[talk - 1] if talk is not None else scene_shots[-1]
+            end = v["at"] + (v["t1"] - v["t0"]) + 0.6
+            if holder["start"] + holder["dur"] - xf < end:
+                holder["dur"] = round(end - holder["start"] + xf, 2)
                 stretched = True
         if not stretched:
             break

@@ -83,7 +83,7 @@ def sound_up(job: Job, sb: dict, edl: dict, seed: int, version: str) -> None:
         n = sound.narrate(edl, sb["brief"].get("language", "en"))
         edit.retime(edl)
         if n:
-            job.say("Narrator", f"voiced {n} narration lines ({version})", "Meta MMS-TTS on the local GPU",
+            job.say("Narrator", f"voiced {n} narration lines ({version})", "Meta SeamlessM4T v2 on the local GPU",
                     seconds=round(time.perf_counter() - t, 1))
         first = "score_plan" not in sb
         t = time.perf_counter()
@@ -97,7 +97,7 @@ def sound_up(job: Job, sb: dict, edl: dict, seed: int, version: str) -> None:
                 job.say("Composer", f"{version} keeps the same score", "the edited cut still fits inside it")
             else:
                 job.say("Composer", f"score for {version}: {len(sc['cues'])} MusicGen clips, crossfaded",
-                        "Meta MusicGen on the local GPU", seconds=round(time.perf_counter() - t, 1))
+                        "Meta MusicGen (medium) on the local GPU", seconds=round(time.perf_counter() - t, 1))
     except Exception as e:  # noqa: BLE001 - a film without the new score is better than no film
         edl.pop("score_path", None)
         job.say("Composer", "fell back to the placeholder score", f"{type(e).__name__}: {e}"[:300])

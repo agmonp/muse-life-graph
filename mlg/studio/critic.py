@@ -105,7 +105,7 @@ def apply(edl: dict, critique: dict) -> tuple[dict, list[str]]:
             if scene_left or not voiced:   # a voice line always keeps a picture under it
                 removed.add(i)
                 done.append(f"{tag} ({n['why']})")
-        elif op == "caption" and s["kind"] in ("still", "clip"):
+        elif op == "caption" and (s["kind"] == "still" or (s["kind"] == "clip" and not s.get("subtitle"))):
             s["caption"] = (n.get("new_caption") or "").strip() or None
             done.append(f"{tag} -> {s['caption']!r} ({n['why']})")
         elif op in ("move_earlier", "move_later") and 0 < i < last:
