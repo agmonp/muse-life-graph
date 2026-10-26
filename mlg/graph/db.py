@@ -7,7 +7,8 @@ from __future__ import annotations
 from contextlib import contextmanager
 from functools import lru_cache
 
-from neo4j import Driver, GraphDatabase
+import certifi
+from neo4j import Driver, GraphDatabase, TrustCustomCAs
 
 from mlg.config import settings
 
@@ -24,6 +25,12 @@ def driver() -> Driver:
     s = settings()
     if not s.neo4j_uri:
         raise RuntimeError("NEO4J_URI is empty - put your AuraDB (or local) URI in .env")
+    scheme, rest = s.neo4j_uri.split("://", 1)
+    if scheme.endswith("+s"):
+        # Windows' local root store may lack the CA AuraDB uses (SSL.com), so verify
+        # against certifi's bundle instead of the "+s" scheme's system default.
+        return GraphDatabase.driver(f"{scheme[:-2]}://{rest}", auth=(s.neo4j_user, s.neo4j_password),
+                                    encrypted=True, trusted_certificates=TrustCustomCAs(certifi.where()))
     return GraphDatabase.driver(s.neo4j_uri, auth=(s.neo4j_user, s.neo4j_password))
 
 
