@@ -138,6 +138,8 @@ indexes on `MediaItem.taken_at`, `Event.start`, `Person.name`.
 ## 6. Prompts (drafts; final versions live in `mlg/prompts/`)
 
 ### 6.1 Perceive (Spark 1.3, structured output)
+Videos go in as keyframes + the audio track in one Chat call: the probe showed native
+video input ignores audio (see [PROBE_FINDINGS.md](PROBE_FINDINGS.md)).
 Key rules: JSON only; every node/edge has confidence + evidence (bbox or [t0,t1] + cue);
 never guess a real name (roster match with stated features, or name spoken/written);
 one-sentence rationale tied to observable cues; `basis: observed|inferred` (inferred

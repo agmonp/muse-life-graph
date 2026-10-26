@@ -83,12 +83,15 @@ def make_samples(use_muse_image: bool) -> dict[str, Path]:
               f"$s.SetOutputToWaveFile('{speech}'); $s.Speak(\"{SPEECH}\"); $s.Dispose()")
         subprocess.run(["powershell", "-NoProfile", "-Command", ps], check=True)
 
-    clip = SAMPLES / "clip.mp4"
+    clip = SAMPLES / "motion.mp4"  # real motion + speech, to see whether video input hears audio
     if not clip.exists():
-        subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-loop", "1", "-i", str(photo), "-i", str(speech),
-                        "-vf", "scale=1280:-2,zoompan=z='min(zoom+0.0015,1.3)':d=1:s=1280x854:fps=25",
-                        "-t", "10", "-c:v", "libx264", "-pix_fmt", "yuv420p", "-c:a", "aac",
-                        "-shortest", str(clip)], check=True)
+        subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-f", "lavfi", "-i", "testsrc2=size=960x540:rate=25",
+                        "-i", str(speech), "-map", "0:v", "-map", "1:a", "-t", "10", "-c:v", "libx264",
+                        "-pix_fmt", "yuv420p", "-c:a", "aac", "-shortest", str(clip)], check=True)
+    frames = sorted(SAMPLES.glob("kf_*.jpg"))
+    if not frames:
+        subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-i", str(clip), "-vf", "fps=0.5,scale=640:-2",
+                        str(SAMPLES / "kf_%02d.jpg")], check=True)
     return {"photo": photo, "speech": speech, "clip": clip}
 
 
@@ -145,12 +148,26 @@ def main() -> None:
             return ans_row(r, r.text.strip()[:200])
         return f
 
+    hear_q = ("Watch this clip. 1) Describe what moves on screen. 2) Quote any words spoken in the "
+              "audio track exactly, or say clearly that you hear no audio.")
+
+    def heard(r: chat.Answer) -> str:
+        return "HEARS SPEECH" if "fastest dancer" in r.text.lower() else "no speech heard"
+
     def t_video(model):
         def f():
-            r = chat.ask([chat.text("Watch this clip. What do you see and hear? Give timestamps for "
-                                    "the key moments and the emotional tone."), chat.video(m["clip"])],
+            r = chat.ask([chat.text(hear_q), chat.video(m["clip"])], model=model, use_cache=uc)
+            return ans_row(r, f"{heard(r)}; " + r.text.strip()[:160])
+        return f
+
+    def t_keyframes_audio(model):
+        def f():
+            frames = sorted(SAMPLES.glob("kf_*.jpg"))
+            parts = [chat.text(f"These are {len(frames)} keyframes (every 2 s) of one clip, plus its audio "
+                               "track. Describe what changes across frames, then quote the speech exactly.")]
+            r = chat.ask(parts + [chat.image(x) for x in frames] + [chat.audio(m["speech"])],
                          model=model, use_cache=uc)
-            return ans_row(r, r.text.strip()[:200])
+            return ans_row(r, f"{heard(r)}; " + r.text.strip()[:160])
         return f
 
     def t_resp_json():
@@ -190,6 +207,8 @@ def main() -> None:
         ("spark-1.3 audio", t_audio(s.model)),
         ("spark-1.3 video (10 s)", t_video(s.model)),
         ("wonder-1.0 video (10 s)", t_video(s.heavy_model)),
+        ("spark-1.2 keyframes + audio (chat)", t_keyframes_audio(s.audio_model)),
+        ("spark-1.3 keyframes + audio (chat)", t_keyframes_audio(s.model)),
         ("voice-transcribe diarization", t_transcribe),
         ("sam-3.1 image", t_sam),
         ("sam-3.1 video", t_sam_video),
