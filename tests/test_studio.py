@@ -157,3 +157,72 @@ def test_hollow_script_is_detected_and_repaired():
     plan.repair(s, known, {"template": "birthday", "title": "Happy 70th"})
     assert [x["target_sec"] for x in s["scenes"]] == [4.0, 19.0] and s["scenes"][1]["intent"] == "peak"
     assert s["arc"] == ["hello", "peak"] and s["closing_card"] == "Happy 70th" and not plan.hollow(s)
+
+
+def _blessing_world():
+    def photo(i, year, summary, who="person:ruth"):
+        return {"id": f"p{i}", "kind": "photo", "date": f"{year}-05-01", "summary": summary, "event": None,
+                "objects": [], "people": ["Ruth"], "faces": [{"id": who, "bbox": [0, 0, 500, 500]}], "said": [],
+                "duration": None, "path": f"p{i}.jpg"}
+    ms = [photo(1, 1975, "Ruth at her wedding"), photo(2, 1995, "Ruth baking bread in the kitchen"),
+          photo(3, 2010, "Ruth in the garden with roses"), photo(4, 2020, "Ruth laughing at the table"),
+          photo(5, 2021, "Noam on a bike", who="person:noam"),
+          {"id": "b1", "kind": "audio", "date": "2026-10-26", "summary": "blessing", "event": "Blessing for Ruth",
+           "objects": [], "people": [], "faces": [], "duration": 30.0, "path": "b1.wav",
+           "said": [{"id": "u1", "text": "Grandma, your bread and your kitchen are home to me", "t0": 0.0, "t1": 6.0},
+                    {"id": "u2", "text": "and your garden roses every spring, happy birthday", "t0": 6.0,
+                     "t1": 17.0}]}]
+    script = {"scenes": [
+        {"order": 1, "moment_ids": ["p1"], "voice_line_ids": [], "target_sec": 5},
+        {"order": 2, "moment_ids": ["b1"], "voice_line_ids": ["u1", "u2"], "target_sec": 18}]}
+    return script, ms
+
+
+def test_blessing_without_picture_gets_its_own_photos_of_the_honoree():
+    from mlg.studio import plan
+    script, ms = _blessing_world()
+    notes = plan.picture_blessings(script, ms, ["person:ruth"], choose=lambda gaps, free: {})  # model gave nothing
+    ids = script["scenes"][1]["moment_ids"]
+    assert ids[-1] == "b1" and len(ids) == 3               # 17 s of words -> 2 photos, then the recording
+    assert set(ids[:2]) == {"p2", "p3"}                    # the bread/kitchen and garden/roses photos
+    assert "p1" not in ids and "p5" not in ids             # never a used photo, never someone else's
+    assert ids[:2] == ["p2", "p3"]                         # in date order
+    assert notes and "2 photo" in notes[0]
+
+
+def test_blessing_pictures_follow_the_model_pick_and_skip_bad_ids():
+    from mlg.studio import plan
+    script, ms = _blessing_world()
+    plan.picture_blessings(script, ms, ["person:ruth"], choose=lambda gaps, free: {2: ["p4", "p3"]})
+    assert script["scenes"][1]["moment_ids"] == ["p4", "p3", "b1"]
+    script, ms = _blessing_world()
+    script["scenes"][1]["moment_ids"] = ["p4", "b1"]       # already has a picture: left alone
+    assert plan.picture_blessings(script, ms, ["person:ruth"], choose=lambda g, f: 1 / 0) == []
+
+
+def test_blessing_picture_that_looks_like_another_shot_is_replaced():
+    from mlg.studio import plan
+    script, ms = _blessing_world()
+    script["scenes"][1]["moment_ids"] = ["p4", "b1"]       # p4 is the same image as scene 1's p1 (a re-send)
+    twins = {frozenset({"p1", "p4"})}
+    notes = plan.picture_blessings(script, ms, ["person:ruth"], choose=lambda g, f: {},
+                                   looks_same=lambda a, b: frozenset({a["id"], b["id"]}) in twins)
+    ids = script["scenes"][1]["moment_ids"]
+    assert "p4" not in ids and ids[-1] == "b1" and set(ids[:-1]) <= {"p2", "p3"}
+    assert "looks the same" in notes[0]
+
+
+def test_blessing_with_no_spare_photo_joins_a_scene_with_changing_pictures():
+    from mlg.studio import plan
+    script, ms = _blessing_world()
+    script["scenes"] = [
+        {"order": 1, "moment_ids": ["p1"], "voice_line_ids": [], "target_sec": 5, "narration": None},
+        {"order": 2, "moment_ids": ["p2", "p3"], "voice_line_ids": [], "target_sec": 9, "narration": "x"},
+        {"order": 3, "moment_ids": ["b1"], "voice_line_ids": ["u1", "u2"], "target_sec": 18},
+        {"order": 4, "moment_ids": ["p4"], "voice_line_ids": [], "target_sec": 5, "narration": None}]
+    notes = plan.picture_blessings(script, ms, ["person:noam-is-not-here"], choose=lambda g, f: {})
+    assert [s["order"] for s in script["scenes"]] == [1, 2, 4]
+    two = script["scenes"][1]
+    assert two["moment_ids"] == ["p2", "p3", "b1"] and two["voice_line_ids"] == ["u1", "u2"]
+    assert two["target_sec"] == 18 and two["narration"] is None
+    assert "moved over scene 2" in notes[-1]
