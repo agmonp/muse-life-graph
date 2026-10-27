@@ -60,6 +60,56 @@ def make(name: str, prompt: str) -> str:
     return f"made {name}"
 
 
+# the toast as a phone video: four moments of the same toast, each a Muse Image edit of the toast photo,
+# filmed "handheld" (slow push + small shake) with quick pans between them, under David's spoken toast
+TOAST_BEATS = [
+    "David standing at the backyard table, raising a glass of wine and speaking to his mother, mid-sentence, "
+    "the others looking up at him; seen from across the table, slightly wider than the reference photo.",
+    "Close-up of grandmother Ruth listening to the toast, one hand on her chest, eyes shining, smiling; "
+    "Maya beside her holding her other hand; string lights blurred behind.",
+    "Ruth laughing through happy tears while Noam and Lia lean in to hug her from both sides; David still "
+    "holding his glass in the foreground, out of focus.",
+    "Everyone at the table raising their glasses toward Ruth, Ruth standing up and hugging David, "
+    "the family cheering; warm evening light.",
+]
+TOAST_FRAMES = CACHE / "demo_toast"   # outside data/demo, so the scan never takes the frames for photos
+
+
+def toast_clip(speech: Path, clip: Path, size: str = "1536x1024") -> None:
+    TOAST_FRAMES.mkdir(parents=True, exist_ok=True)
+    frames = [TOAST_FRAMES / f"beat_{k}.png" for k in range(len(TOAST_BEATS))]
+
+    def one(k: int) -> None:
+        if not frames[k].exists():
+            generate(f"Candid phone video still, {FAMILY}, at Ruth's 70th birthday dinner in the backyard at dusk, "
+                     f"the same table, clothes and lights as the reference toast photo. {TOAST_BEATS[k]}",
+                     frames[k], references=[OUT / "IMG_20251012_190210.png", REF], size=size)
+    with ThreadPoolExecutor(4) as ex:
+        list(ex.map(one, range(len(frames))))
+    r = subprocess.run(["ffprobe", "-v", "error", "-show_entries", "format=duration", "-of", "csv=p=0",
+                        str(speech)], capture_output=True, text=True, check=True)
+    total, fps, pan = float(r.stdout.strip()) + 0.6, 30, 0.35
+    seg = (total + pan * (len(frames) - 1)) / len(frames)
+    n = round(seg * fps)
+    ins, parts = [], []
+    for k, f in enumerate(frames):
+        ins += ["-loop", "1", "-t", f"{seg:.3f}", "-i", str(f)]
+        # handheld: a slow push in, a slow sway and a faint fast tremor, different phase per beat
+        parts.append(f"[{k}:v]scale=1920:-2,zoompan=z='1.04+0.0009*on'"
+                     f":x='iw/2-(iw/zoom/2)+14*sin(on/17+{k})+4*sin(on/3.3)'"
+                     f":y='ih/2-(ih/zoom/2)+9*sin(on/23+{2 * k})+3*sin(on/2.9)'"
+                     f":d={n}:s=1280x854:fps={fps},setsar=1,format=yuv420p[b{k}]")
+    chain, last = [], "b0"
+    for k in range(1, len(frames)):
+        off = k * (seg - pan)
+        chain.append(f"[{last}][b{k}]xfade=transition=smoothleft:duration={pan}:offset={off:.3f}[x{k}]")
+        last = f"x{k}"
+    subprocess.run(["ffmpeg", "-y", "-loglevel", "error", *ins, "-i", str(speech), "-filter_complex",
+                    ";".join(parts + chain), "-map", f"[{last}]", "-map", f"{len(frames)}:a",
+                    "-c:v", "libx264", "-pix_fmt", "yuv420p", "-r", str(fps), "-c:a", "aac", "-shortest",
+                    str(clip)], check=True)
+
+
 def main() -> None:
     OUT.mkdir(parents=True, exist_ok=True)
     shutil.copy(REF, OUT / "IMG_20251012_184500.png")  # the reference party photo itself
@@ -74,7 +124,7 @@ def main() -> None:
         img.thumbnail((1280, 1280))
         img.save(wa, quality=60)
 
-    # a short "video" of the toast photo with a spoken blessing (Windows speech)
+    # the toast video: a spoken toast (Windows speech) under a handheld clip of the toast
     speech = OUT / "blessing.wav"
     if not speech.exists():
         text = ("Mom, seventy years, and you still dance faster than all of us. Thank you for every "
@@ -84,11 +134,7 @@ def main() -> None:
         subprocess.run(["powershell", "-NoProfile", "-Command", ps], check=True)
     clip = OUT / "VID_20251012_190500.mp4"
     if not clip.exists():
-        subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-loop", "1", "-i", str(OUT / "IMG_20251012_190210.png"),
-                        "-i", str(speech), "-filter_complex",
-                        "[0:v]scale=3072:-2,zoompan=z='1+0.0008*on':x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)'"
-                        ":d=10000:s=1280x854:fps=25[v]", "-map", "[v]", "-map", "1:a",
-                        "-c:v", "libx264", "-pix_fmt", "yuv420p", "-c:a", "aac", "-shortest", str(clip)], check=True)
+        toast_clip(speech, clip)
     voice = OUT / "AUD_20251012_191000.wav"
     if not voice.exists():
         shutil.copy(speech, voice)
