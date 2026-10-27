@@ -61,6 +61,20 @@ video { width: 100%; max-height: 62vh; background: #000; border-radius: 10px; di
 .note { border-left: 3px solid var(--warn); padding: 2px 0 2px 10px; font-size: 13.5px; }
 .note.applied { border-color: var(--ok); }
 .note button { min-height: 28px; padding: 2px 8px; font-size: 12px; margin-right: 6px; }
+.status.waiting { color: var(--warn); }
+.ask { border: 2px solid var(--warn); }
+.q { padding: 10px 0; border-top: 1px solid var(--line); }
+.q:first-of-type { border-top: 0; }
+.q .pics { display: flex; gap: 8px; flex-wrap: wrap; margin: 8px 0; }
+.q .pics img { height: 150px; max-width: 100%; border-radius: 10px; object-fit: cover; background: var(--chip); }
+.q .opts { display: flex; gap: 8px; flex-wrap: wrap; }
+.q .opt { display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 6px; }
+.q .opt img { width: 170px; height: 115px; object-fit: cover; border-radius: 8px; }
+.q .opt.def { outline: 2px dashed var(--muted); }
+.q .opt.sel { outline: 3px solid var(--accent); }
+.q .done { color: var(--ok); font-size: 13.5px; margin-top: 4px; }
+.beat { display: inline-block; font-size: 11px; padding: 1px 6px; border-radius: 999px; background: var(--chip); }
+label.chk { display: flex; gap: 6px; align-items: center; font-size: 13.5px; color: var(--muted); }
 .empty { color: var(--muted); text-align: center; padding: 40px 0; }
 .err { color: var(--bad); white-space: pre-wrap; }
 </style>
@@ -73,6 +87,10 @@ video { width: 100%; max-height: 62vh; background: #000; border-radius: 10px; di
     <textarea id="req" dir="auto" placeholder="A 60-second film for grandma Ruth's 70th birthday, warm and a little funny, ending with the whole family together."></textarea>
     <div class="row">
       <select id="dataset" aria-label="Dataset"><option value="demo">Demo family</option><option value="real">My photos</option></select>
+      <select id="template" aria-label="Template"><option value="">Template: from the request</option></select>
+    </div>
+    <div class="row">
+      <label class="chk"><input type="checkbox" id="askme" checked> Ask me before cutting</label>
       <button class="primary" id="make">Make the film</button>
     </div>
     <div class="films" id="films"></div>
@@ -117,7 +135,32 @@ async function poll() {
   if (!current) return;
   const st = await api(`/api/films/${current}`);
   render(st);
-  if (st.status === 'running') timer = setTimeout(poll, 2000); else loadFilms();
+  if (st.status === 'running' || st.status === 'waiting') timer = setTimeout(poll, 2000); else loadFilms();
+}
+
+let picked = {};   // question id -> chosen value, until sent
+
+function questionsHtml(st) {
+  const qs = st.questions || [];
+  if (!qs.length) return '';
+  const waiting = st.status === 'waiting';
+  const left = waiting && st.waiting_until ? Math.max(0, Math.round((st.waiting_until - Date.now() / 1000) / 60)) : 0;
+  const body = qs.map(q => {
+    const pics = q.kind === 'identity'
+      ? `<div class="pics"><img src="${esc(q.image)}" alt="the face"><img src="${esc(q.context_image)}" alt="the whole picture"></div>` : '';
+    const opts = q.options.map(o => {
+      const sel = (picked[q.id] ?? q.answer) === o.value;
+      const def = q.kind === 'pick' && o.value === q.default;
+      return `<button class="opt ${sel ? 'sel' : ''} ${def ? 'def' : ''}" data-q="${esc(q.id)}" data-v="${esc(o.value)}" ${waiting ? '' : 'disabled'}>
+        ${o.image ? `<img src="${esc(o.image)}" alt="">` : ''}<span dir="auto">${esc(o.label)}${def ? ' (crew\'s pick)' : ''}</span></button>`;
+    }).join('');
+    return `<div class="q"><b dir="auto">${esc(q.text)}</b><div class="sub" dir="auto">${esc(q.why)}</div>${pics}
+      <div class="opts">${opts}${waiting ? `<button data-q="${esc(q.id)}" data-v="__crew__">Let the crew decide</button>` : ''}</div>
+      ${q.outcome ? `<div class="done">✓ ${esc(q.outcome)}</div>` : ''}</div>`;
+  }).join('');
+  return `<div class="card ${waiting ? 'ask' : ''}"><h2>${waiting
+      ? `The crew is waiting for you <span class="sub">— if you don't answer in ${left} min, it decides itself</span>`
+      : 'Questions the crew asked'}</h2>${body}</div>`;
 }
 
 function noteHtml(n, v, applied) {
@@ -154,7 +197,7 @@ function scenesHtml(st) {
       const line = chk.narration_fix && sc.narration
         ? `<s dir="auto">${esc(sc.narration)}</s><br><span dir="auto">${esc(chk.narration_fix)}</span>`
         : `<span dir="auto">${esc(sc.narration || '')}</span>`;
-      return `<div class="scene"><div class="sub">${sc.order} · ${esc(sc.emotion || '')}</div>
+      return `<div class="scene"><div class="sub">${sc.order} · ${sc.beat ? `<span class="beat">${esc(sc.beat.replace(/_/g, ' '))}</span> · ` : ''}${esc(sc.emotion || '')}</div>
         <div class="thumbs">${thumbs}</div><div class="line">${line}</div>
         <div class="sub" dir="auto">${esc(chk.note || sc.intent)}</div></div>`;
     }).join('') + '</div></div>';
@@ -171,7 +214,7 @@ function render(st) {
   // keep the video elements alive while polling so playback isn't interrupted
   const vkey = JSON.stringify(Object.fromEntries(Object.entries(st.versions || {}).map(([k, v]) => [k, v.score ?? v.duration])));
   if (rendered.vkey !== vkey || !$('#versions')) {
-    main.innerHTML = `<div id="headbox">${head}</div><div id="logbox">${log}</div><div id="scenebox">${scenesHtml(st)}</div>` +
+    main.innerHTML = `<div id="headbox">${head}</div><div id="askbox"></div><div id="logbox">${log}</div><div id="scenebox">${scenesHtml(st)}</div>` +
       `<div class="versions" id="versions">${versionHtml(st, 'v1')}${versionHtml(st, 'v2')}</div>`;
     rendered.vkey = vkey;
   } else {
@@ -179,10 +222,26 @@ function render(st) {
     $('#logbox').innerHTML = log;
     $('#scenebox').innerHTML = scenesHtml(st);
   }
+  // the question images stay put while polling unless something about the questions changed
+  const qkey = JSON.stringify([st.status, (st.questions || []).map(q => [q.id, q.outcome]), picked,
+                               st.waiting_until ? Math.round((st.waiting_until - Date.now() / 1000) / 60) : 0]);
+  if (rendered.qkey !== qkey) { $('#askbox').innerHTML = questionsHtml(st); rendered.qkey = qkey; }
+  if (st.status === 'waiting' && !rendered.askShown) {   // on a phone the questions are below the fold
+    rendered.askShown = true; $('#askbox').scrollIntoView({block: 'start', behavior: 'smooth'});
+  }
   const box = $('.log'); if (box && st.log.length !== lastLogLen) { box.scrollTop = box.scrollHeight; lastLogLen = st.log.length; }
 }
 
-$('#main').addEventListener('click', e => {
+$('#main').addEventListener('click', async e => {
+  const qb = e.target.closest('button[data-q]');
+  if (qb) {
+    picked[qb.dataset.q] = qb.dataset.v;
+    rendered.qkey = null;
+    try { await api(`/api/films/${current}/answers`, {answers: {[qb.dataset.q]: qb.dataset.v}}); }
+    catch (err) { alert(err.message); }
+    poll();
+    return;
+  }
   const b = e.target.closest('button[data-seek]');
   if (!b) return;
   const v = $(`#vid_${b.dataset.seek}`);
@@ -192,7 +251,11 @@ $('#films').addEventListener('click', e => { const b = e.target.closest('button[
 $('#make').addEventListener('click', async () => {
   const request = $('#req').value.trim() || $('#req').placeholder;
   $('#make').disabled = true;
-  try { const {id} = await api('/api/films', {request, dataset: $('#dataset').value}); await loadFilms(); open(id); }
+  try {
+    const {id} = await api('/api/films', {request, dataset: $('#dataset').value,
+                                          template: $('#template').value || null, ask: $('#askme').checked});
+    picked = {}; await loadFilms(); open(id);
+  }
   catch (e) { alert(e.message); }
   finally { $('#make').disabled = false; }
 });
@@ -229,6 +292,10 @@ $('#blessings').addEventListener('click', e => {
 });
 $('#dataset').addEventListener('change', loadPeople);
 
+api('/api/templates').then(ts => {
+  $('#template').insertAdjacentHTML('beforeend', ts.map(t =>
+    `<option value="${esc(t.id)}" title="${esc(t.beats.join(' → '))}">${esc(t.label)}</option>`).join(''));
+});
 loadFilms();
 loadPeople();
 loadBlessings();

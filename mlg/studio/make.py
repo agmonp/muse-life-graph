@@ -19,7 +19,8 @@ from typing import Callable
 
 from mlg.config import DATA
 from mlg.graph.db import session
-from mlg.studio import checker, critic, edit, render, sound
+from mlg.people import roster
+from mlg.studio import ask, checker, critic, edit, render, sound
 from mlg.studio.plan import plan
 
 FILMS = DATA / "films"
@@ -103,22 +104,42 @@ def sound_up(job: Job, sb: dict, edl: dict, seed: int, version: str) -> None:
         job.say("Composer", "fell back to the placeholder score", f"{type(e).__name__}: {e}"[:300])
 
 
+def _scenes(sb: dict) -> list[dict]:
+    return [{"order": s["order"], "beat": s.get("beat"), "intent": s["intent"], "narration": s.get("narration"),
+             "emotion": s.get("emotion"), "moments": list(s["moment_ids"])} for s in sb["script"]["scenes"]]
+
+
 def make(request: str, dataset: str = "demo", film_id: str | None = None,
-         on_start: Callable[[str], None] | None = None) -> dict:
+         on_start: Callable[[str], None] | None = None, template: str | None = None,
+         ask_wait: float = 0) -> dict:
+    """ask_wait: seconds the crew waits for the owner's answers (0 = don't ask, use the crew's picks)."""
     film_id = film_id or time.strftime("film_%Y%m%d_%H%M%S")
     job = Job(film_id, request, dataset)
+    job.state["timing"] = {}
     if on_start:
         on_start(film_id)
     try:
         job.say("Producer", "reading the request", request)
-        sb = plan(request, dataset)
+        sb = plan(request, dataset, template)
         for entry in sb["crew_log"]:
             job.say(entry["who"], entry["did"], entry.get("why", ""))
         job.state["title"] = sb["script"]["title"]
         job.state["brief"] = sb["brief"]
-        job.state["scenes"] = [{"order": s["order"], "intent": s["intent"], "narration": s.get("narration"),
-                                "emotion": s.get("emotion"), "moments": list(s["moment_ids"])}
-                               for s in sb["script"]["scenes"]]
+        job.state["scenes"] = _scenes(sb)
+
+        qs = ask.questions(sb, roster(dataset))
+        if qs:
+            if ask_wait > 0:
+                job.say("Director", f"pausing to ask you {len(qs)} question{'s' * (len(qs) > 1)}",
+                        " / ".join(q["text"] for q in qs))
+            t = time.perf_counter()
+            answers = ask.wait(job, qs, ask_wait)
+            job.state["timing"]["waiting_for_owner"] = round(time.perf_counter() - t, 1)
+            done = ask.apply(sb, qs, answers)
+            job.state["questions"] = qs
+            job.state["scenes"] = _scenes(sb)
+            job.say("Director", f"{sum(q['answer'] != ask.NOBODY for q in qs)} of {len(qs)} answered",
+                    "; ".join(done))
 
         job.say("Picture Checker", "looking at every picture of every scene")
         notes = checker.check(sb)
@@ -166,6 +187,7 @@ def make(request: str, dataset: str = "demo", film_id: str | None = None,
 
         record(film_id, sb, edl2, v2, {"v1": c1["score"], "v2": c2["score"]})
         job.state["status"] = "done"
+        job.state["finished"] = time.time()
         job.save()
     except Exception as e:  # noqa: BLE001 - surface the failure in the Edit Room
         job.state["status"] = "failed"
@@ -179,8 +201,11 @@ def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("request")
     ap.add_argument("--dataset", default="demo")
+    ap.add_argument("--template", choices=["birthday", "wedding", "friends", "family"])
+    ap.add_argument("--ask-wait", type=float, default=0,
+                    help="seconds to wait for answers in the Edit Room (0 = the crew decides)")
     a = ap.parse_args()
-    st = make(a.request, a.dataset)
+    st = make(a.request, a.dataset, template=a.template, ask_wait=a.ask_wait)
     print(json.dumps({"film": st["id"], "v1": st["versions"]["v1"].get("score"),
                       "v2": st["versions"]["v2"].get("score")}))
 

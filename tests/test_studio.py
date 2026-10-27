@@ -87,3 +87,73 @@ def test_apply_notes_safely():
     assert "e" in [s["moment"] for s in e2["shots"] if s["kind"] == "still"]  # voiced scene keeps its picture
     starts = [s["start"] for s in e2["shots"]]
     assert starts == sorted(starts) and starts[0] == 0
+
+
+def _sb():
+    ms = {
+        "m1": {"id": "m1", "kind": "photo", "date": "1994-07-01", "faces": [], "people": [],
+               "unknown": [{"obs": "s1:p1", "bbox": [200, 170, 730, 970], "candidate": "person:ruth",
+                            "appearance": "young woman, curly hair"}]},
+        "m2": {"id": "m2", "kind": "photo", "date": "2025-10-12", "faces": [], "people": [], "unknown": []},
+        "m3": {"id": "m3", "kind": "photo", "date": "2025-10-12", "faces": [], "people": [], "unknown": []},
+        "m4": {"id": "m4", "kind": "photo", "date": "2024-02-03", "faces": [], "people": [],
+               "unknown": [{"obs": "s4:p9", "bbox": [0, 0, 50, 50], "candidate": None}]},   # background face
+    }
+    script = {"scenes": [{"order": 1, "intent": "young Ruth", "moment_ids": ["m1", "m4"]},
+                         {"order": 2, "intent": "the peak", "moment_ids": ["m2"]},
+                         {"order": 3, "intent": "together", "moment_ids": ["m3"]}],
+              "doubts": [{"scene_order": 2, "question": "Which picture for the peak?", "why": "",
+                          "options": [{"moment_id": "m2", "label": "candles"}, {"moment_id": "m3", "label": "hug"}],
+                          "chosen_moment_id": "m2"}]}
+    return {"moments": ms, "script": script, "brief": {"subject_ids": ["person:ruth"]}}
+
+
+ROSTER = [{"id": "person:ruth", "name": "Ruth"}, {"id": "person:david", "name": "David"}]
+
+
+def test_questions_ask_about_clear_unnamed_faces_and_doubts():
+    from mlg.studio import ask
+    qs = ask.questions(_sb(), ROSTER)
+    assert [q["kind"] for q in qs] == ["identity", "pick"]          # the tiny background face is not asked
+    assert qs[0]["text"].startswith("Is this Ruth?") and qs[0]["options"][0]["value"] == "person:ruth"
+    assert qs[1]["default"] == "m2"
+
+
+def test_owner_pick_swaps_pictures_between_scenes():
+    from mlg.studio import ask
+    sb = _sb()
+    qs = ask.questions(sb, ROSTER)
+    ask.apply(sb, qs, {"q1": "other", "q2": "m3"})
+    sc = sb["script"]["scenes"]
+    assert sc[1]["moment_ids"] == ["m3"] and sc[2]["moment_ids"] == ["m2"]   # swapped, nothing used twice
+    assert sc[0]["moment_ids"] == ["m4"]                                       # "not Ruth": picture out
+
+
+def test_no_answer_keeps_the_crews_picks():
+    from mlg.studio import ask
+    sb = _sb()
+    qs = ask.questions(sb, ROSTER)
+    ask.apply(sb, qs, {})
+    assert sb["script"]["scenes"][1]["moment_ids"] == ["m2"] and all("crew" in q["outcome"] for q in qs)
+
+
+def test_template_check_reports_missing_and_misordered_beats():
+    from mlg.studio import templates
+    assert templates.pick("anniversary") == "wedding" and templates.pick("birthday", "friends") == "friends"
+    script = {"scenes": [{"order": 1, "beat": "hello"}, {"order": 2, "beat": "peak"},
+                         {"order": 3, "beat": "roots"}, {"order": 4, "beat": "together"}]}
+    notes = templates.check("birthday", script)
+    assert "no scene for the 'people' beat" in notes and "beats out of the template's order" in notes
+    assert "people (~20 s)" in templates.for_prompt("birthday", 70)
+
+
+def test_hollow_script_is_detected_and_repaired():
+    from mlg.studio import plan
+    known = {"a": {"kind": "photo", "duration": None}, "v": {"kind": "video", "duration": 22.0}}
+    s = {"logline": "", "arc": [], "closing_card": "",
+         "scenes": [{"beat": "hello", "intent": "", "moment_ids": ["a"], "target_sec": 0},
+                    {"beat": "peak", "intent": "", "moment_ids": ["a", "v"], "target_sec": 0}]}
+    assert plan.hollow(s)
+    plan.repair(s, known, {"template": "birthday", "title": "Happy 70th"})
+    assert [x["target_sec"] for x in s["scenes"]] == [4.0, 19.0] and s["scenes"][1]["intent"] == "peak"
+    assert s["arc"] == ["hello", "peak"] and s["closing_card"] == "Happy 70th" and not plan.hollow(s)

@@ -11,7 +11,7 @@ import time
 from mlg.config import ROOT, settings
 from mlg.muse import chat
 from mlg.people import roster
-from mlg.studio import research
+from mlg.studio import research, templates
 
 PROMPTS = ROOT / "mlg" / "prompts"
 
@@ -37,7 +37,7 @@ BRIEF_SCHEMA = {
 
 SCRIPT_SCHEMA = {
     "type": "object", "additionalProperties": False,
-    "required": ["title", "subtitle", "logline", "arc", "scenes", "closing_card"],
+    "required": ["title", "subtitle", "logline", "arc", "scenes", "closing_card", "doubts"],
     "properties": {
         "title": {"type": "string"},
         "subtitle": {"type": "string"},
@@ -45,9 +45,11 @@ SCRIPT_SCHEMA = {
         "arc": {"type": "array", "items": {"type": "string"}},
         "scenes": {"type": "array", "items": {
             "type": "object", "additionalProperties": False,
-            "required": ["order", "intent", "moment_ids", "narration", "voice_line_ids", "target_sec", "emotion"],
+            "required": ["order", "beat", "intent", "moment_ids", "narration", "voice_line_ids", "target_sec",
+                         "emotion"],
             "properties": {
                 "order": {"type": "integer"},
+                "beat": {"type": "string", "description": "the template beat this scene belongs to"},
                 "intent": {"type": "string", "description": "what this scene does in the story"},
                 "moment_ids": {"type": "array", "items": {"type": "string"}},
                 "narration": {"anyOf": [{"type": "string"}, {"type": "null"}]},
@@ -56,6 +58,20 @@ SCRIPT_SCHEMA = {
                 "emotion": {"type": "string"},
             }}},
         "closing_card": {"type": "string", "description": "one short line for the last frame"},
+        "doubts": {"type": "array", "description": "at most 1-2 picture choices only the owner can settle",
+                   "items": {
+                       "type": "object", "additionalProperties": False,
+                       "required": ["scene_order", "question", "options", "chosen_moment_id", "why"],
+                       "properties": {
+                           "scene_order": {"type": "integer"},
+                           "question": {"type": "string", "description": "short, in the brief's language"},
+                           "options": {"type": "array", "items": {
+                               "type": "object", "additionalProperties": False,
+                               "required": ["moment_id", "label"],
+                               "properties": {"moment_id": {"type": "string"}, "label": {"type": "string"}}}},
+                           "chosen_moment_id": {"type": "string", "description": "the one you put in the scene"},
+                           "why": {"type": "string"},
+                       }}},
     },
 }
 
@@ -77,10 +93,38 @@ def produce(request: str, dataset: str, ms: list[dict]) -> dict:
 def write_script(brief: dict, ms: list[dict]) -> dict:
     system = (PROMPTS / "screenwriter.md").read_text(encoding="utf-8").format(
         brief=json.dumps(brief, ensure_ascii=False),
+        template=templates.for_prompt(brief["template"], brief["target_seconds"]),
         moments=json.dumps(research.for_prompt(ms), ensure_ascii=False))
-    ans = chat.ask([chat.text("Write the film now.")], system=system, model=settings().heavy_model,
-                   schema=SCRIPT_SCHEMA, schema_name="script", effort="high", max_tokens=24000)
-    return ans.data
+    for attempt in range(3):
+        ans = chat.ask([chat.text("Write the film now.")], system=system, model=settings().heavy_model,
+                       schema=SCRIPT_SCHEMA, schema_name="script", effort="high", max_tokens=24000,
+                       use_cache=attempt == 0)
+        if not hollow(ans.data):
+            break
+    return repair(ans.data, {m["id"]: m for m in ms}, brief)
+
+
+def hollow(script: dict) -> bool:
+    """Wonder sometimes returns the right scenes with every free-text field blank and all lengths 0."""
+    scenes = script.get("scenes") or []
+    return not scenes or not script.get("logline") or \
+        sum(1 for s in scenes if not s.get("intent") or not s.get("target_sec")) > len(scenes) / 2
+
+
+def repair(script: dict, known: dict, brief: dict) -> dict:
+    """Fill what is still blank after the retries, so a hollow reply still makes a sane film."""
+    t = templates.TEMPLATES[brief["template"]]
+    for s in script["scenes"]:
+        if not s.get("target_sec"):
+            s["target_sec"] = round(sum(min(known[m]["duration"] or 5, 15) if known[m]["kind"] == "video"
+                                        else t["sec_per_photo"] if known[m]["kind"] == "photo" else 0
+                                        for m in s["moment_ids"] if m in known), 1) or t["sec_per_photo"]
+        if not s.get("intent"):
+            s["intent"] = (s.get("beat") or "scene").replace("_", " ")
+    script["arc"] = script.get("arc") or [s.get("beat") or "" for s in script["scenes"]]
+    script["logline"] = script.get("logline") or brief.get("subtitle") or brief.get("title") or ""
+    script["closing_card"] = script.get("closing_card") or brief.get("title") or ""
+    return script
 
 
 def validate(script: dict, ms: list[dict]) -> list[str]:
@@ -109,19 +153,21 @@ def validate(script: dict, ms: list[dict]) -> list[str]:
     return notes
 
 
-def plan(request: str, dataset: str = "demo") -> dict:
+def plan(request: str, dataset: str = "demo", template: str | None = None) -> dict:
     t0 = time.perf_counter()
     ms = research.moments(dataset)
     brief = produce(request, dataset, ms)
+    brief["template"] = templates.pick(brief["occasion"], template)
     t1 = time.perf_counter()
     script = write_script(brief, ms)
     t2 = time.perf_counter()
-    notes = validate(script, ms)
+    notes = validate(script, ms) + templates.check(brief["template"], script)
     return {"request": request, "dataset": dataset, "brief": brief, "script": script,
             "moments": {m["id"]: m for m in ms},
             "crew_log": [
                 {"who": "Researcher", "did": f"found {len(ms)} moments in the life graph"},
-                {"who": "Producer", "did": f"{brief['occasion']}, {brief['tone']}, {brief['target_seconds']} s, "
+                {"who": "Producer", "did": f"{brief['occasion']} ({templates.TEMPLATES[brief['template']]['label']} "
+                                           f"template), {brief['tone']}, {brief['target_seconds']} s, "
                                            f"{brief['aspect']}", "why": brief.get("notes", ""),
                  "seconds": round(t1 - t0, 1)},
                 {"who": "Screenwriter", "did": f"{len(script['scenes'])} scenes: {' -> '.join(script['arc'])}",

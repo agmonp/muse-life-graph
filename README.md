@@ -53,6 +53,28 @@ Copy-Item .env.example .env   # then fill in keys
 .\.venv\Scripts\python.exe -m mlg.perceive.run --workers 6
 ```
 
+## Phases 3-7 (built 2026-10-26/27): the film studio
+
+| Module | What it does |
+|---|---|
+| `mlg/studio/research.py` | The Researcher: every usable moment from the graph, with who is in it, what was said, and faces it could not name |
+| `mlg/studio/templates.py` | Story shapes for birthday, wedding/anniversary, friends and family films: beats, time shares, rules |
+| `mlg/studio/plan.py` | Producer (Muse Spark) -> Screenwriter (Muse Wonder) -> code check of every claim; hollow replies are retried |
+| `mlg/studio/ask.py` | Pause and ask: before cutting, the crew asks the owner what only they know ("Is this young woman in the 1995 scan Ruth?", "Which picture for the peak?"); answers go into the graph |
+| `mlg/studio/checker.py` | Picture Checker: Muse looks at every picture of every scene before the cut |
+| `mlg/studio/edit.py`, `render.py` | Editor (deterministic edit list) and renderer |
+| `mlg/studio/sound.py`, `gpu_worker.py` | Narrator (Meta SeamlessM4T v2) and score (Meta MusicGen medium) on the local GPU |
+| `mlg/studio/critic.py` | Critic: Muse Wonder watches the draft and gives notes the editor applies; it scores v1 and v2 |
+| `mlg/shema/blessings.py` | Blessings through a link: Voice Transcribe + Muse Spark pick the film-worthy lines |
+| `mlg/web/` | Edit Room (`/studio`), "Who is this?" (`/`), blessing page (`/bless/<token>`) |
+| `scripts/evals.py` | Measurements -> [docs/EVALS.md](docs/EVALS.md) |
+
+```powershell
+.\.venv\Scripts\python.exe -m uvicorn mlg.web.app:app --port 8800       # then open /studio
+.\.venv\Scripts\python.exe -m mlg.studio.make "A 60-second film for grandma Ruth's 70th" --template birthday
+.\.venv\Scripts\python.exe scripts\evals.py --films 6
+```
+
 ## License
 
 Apache-2.0

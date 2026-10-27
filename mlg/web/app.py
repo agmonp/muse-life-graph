@@ -28,8 +28,12 @@ from mlg.perceive.verify import MIN_CONF, check, identify
 
 STATIC = Path(__file__).parent / "static"
 CROP_CACHE = CACHE / "crops"
-MAX_REFS = 6
 app = FastAPI(title="Muse Life Graph")
+VOICE_TILE = ('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 150 100"><rect width="150" height="100" '
+              'fill="#e8e4f6"/><g fill="none" stroke="#5f3dc4" stroke-width="5" stroke-linecap="round">'
+              '<path d="M45 50v0M60 38v24M75 28v44M90 38v24M105 50v0"/></g>'
+              '<text x="75" y="92" font-family="sans-serif" font-size="11" fill="#5f3dc4" '
+              'text-anchor="middle">voice</text></svg>')
 
 
 def _jpeg(img, quality: int = 85) -> bytes:
@@ -92,6 +96,8 @@ def api_photo(sha: str):
             r = s.run("MATCH (mi:MediaItem {id: $id}) RETURN mi.path AS path, mi.kind AS kind", id=sha).single()
         if not r:
             raise HTTPException(404)
+        if r["kind"] == "audio":   # a voice recording (a blessing) has no picture: show a voice tile
+            return Response(VOICE_TILE, media_type="image/svg+xml", headers={"Cache-Control": "max-age=86400"})
         if r["kind"] == "video":
             from mlg.perceive.keyframes import keyframes
             frames = keyframes(Path(r["path"]))
@@ -149,32 +155,19 @@ class Answer(BaseModel):
 
 @app.post("/api/answer")
 def api_answer(a: Answer):
-    o = _obs(a.obs_id)
+    _obs(a.obs_id)
     pid = a.person_id
-    added_ref = None
     if a.action == "confirm":
-        crop = _crop_for(a.obs_id)
-        if a.new_name:
-            if crop is None:
-                raise HTTPException(400, "face too small to start a new person")
-            pid = people.new_person(a.new_name.strip(), crop, people.dataset_of(o["path"]))
-        elif not pid:
-            raise HTTPException(400, "person_id or new_name required")
-        else:
-            ref = next((p for p in people.roster() if p["id"] == pid), None)
-            if crop is not None and ref and len(ref["crops"]) < MAX_REFS:
-                added_ref = people.add_ref(pid, crop)
-        with session() as s:
-            s.run("""MATCH (o:Observation {id: $oid}), (p:Person {id: $pid})
-                     SET o.user_action = 'confirm'
-                     MERGE (p)-[r:OBSERVED_AS]->(o) SET r.confidence = 1.0, r.confirmed_by = 'user',
-                           r.rationale = 'confirmed by the owner'""", oid=a.obs_id, pid=pid).consume()
+        try:
+            pid = identity.confirm_face(a.obs_id, pid, a.new_name)
+        except ValueError as e:
+            raise HTTPException(400, str(e))
     elif a.action in ("skip", "not_person"):
         with session() as s:
             s.run("MATCH (o:Observation {id: $oid}) SET o.user_action = $a", oid=a.obs_id, a=a.action).consume()
+        identity.record(a.obs_id, a.action, pid)
     else:
         raise HTTPException(400, "unknown action")
-    identity.record(a.obs_id, a.action, pid, added_ref)
     return {"ok": True, "person_id": pid}
 
 
@@ -345,6 +338,17 @@ def studio_page():
 class FilmRequest(BaseModel):
     request: str
     dataset: str = "demo"
+    template: str | None = None      # None = the producer picks from the request
+    ask: bool = True                 # pause and ask the owner before cutting
+
+
+ASK_WAIT = 600   # seconds; after that the crew goes with its own picks
+
+
+@app.get("/api/templates")
+def api_templates():
+    from mlg.studio.templates import catalog
+    return catalog()
 
 
 @app.post("/api/films")
@@ -355,7 +359,8 @@ def api_make_film(r: FilmRequest):
 
     def run():
         try:
-            make(r.request.strip(), r.dataset, film_id)
+            make(r.request.strip(), r.dataset, film_id, template=r.template or None,
+                 ask_wait=ASK_WAIT if r.ask else 0)
         except Exception:  # noqa: BLE001 - the error is in state.json for the page
             pass
 
@@ -375,9 +380,28 @@ def _state(film_id: str) -> dict:
     if not p.exists():
         raise HTTPException(404, "no such film")
     st = json.loads(p.read_text(encoding="utf-8"))
-    if st.get("status") == "running" and film_id not in FILM_THREADS:
+    if st.get("status") in ("running", "waiting") and film_id not in FILM_THREADS:
         st["status"] = "interrupted"   # the server restarted while this film was being made
     return st
+
+
+class Answers(BaseModel):
+    answers: dict[str, str]
+
+
+@app.post("/api/films/{film_id}/answers")
+def api_film_answers(film_id: str, a: Answers):
+    import json
+    st = _state(film_id)
+    if st.get("status") != "waiting":
+        raise HTTPException(409, "the crew is not waiting for answers")
+    p = FILMS / film_id / "answers.json"
+    old = json.loads(p.read_text(encoding="utf-8")) if p.exists() else {}
+    old.update(a.answers)
+    tmp = p.with_suffix(".tmp")
+    tmp.write_text(json.dumps(old, ensure_ascii=False), encoding="utf-8")
+    tmp.replace(p)
+    return {"ok": True, "answered": len(old)}
 
 
 @app.get("/api/films")

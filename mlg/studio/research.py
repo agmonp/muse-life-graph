@@ -15,21 +15,27 @@ def moments(dataset: str = "demo", person_ids: list[str] | None = None) -> list[
     with session() as s:
         rows = s.run("""
             MATCH (m:Moment)-[:DEPICTED_IN]->(mi:MediaItem)
-            OPTIONAL MATCH (p:Person)-[:OBSERVED_AS]->(o:Observation)-[:PRESENT_AT]->(m)
+            OPTIONAL MATCH (p:Person)-[r:OBSERVED_AS]->(o:Observation)-[:PRESENT_AT]->(m)
             WITH m, mi, collect(DISTINCT {id: p.id, name: p.name, bbox: o.bbox, frame: o.frame,
-                                         expression: o.expression}) AS faces
+                                         expression: o.expression, obs: o.id, conf: r.confidence,
+                                         by: r.confirmed_by}) AS faces
+            OPTIONAL MATCH (x:Observation)-[:PRESENT_AT]->(m)
+            WHERE x.bbox IS NOT NULL AND NOT (:Person)-[:OBSERVED_AS]->(x)
+                  AND coalesce(x.user_action, '') <> 'not_person'
+            WITH m, mi, faces, collect(DISTINCT {obs: x.id, bbox: x.bbox, frame: x.frame, appearance: x.appearance,
+                                                candidate: x.candidate}) AS unknown
             OPTIONAL MATCH (m)-[ev:EVOKED_EMOTION]->(e:Emotion)
-            WITH m, mi, faces, collect(DISTINCT {emotion: e.name, intensity: ev.intensity}) AS mood
+            WITH m, mi, faces, unknown, collect(DISTINCT {emotion: e.name, intensity: ev.intensity}) AS mood
             OPTIONAL MATCH (u:Utterance)-[:IN]->(mi)
             OPTIONAL MATCH (sp:Person)-[:OBSERVED_AS]->(:Observation)-[:SAID]->(u)
-            WITH m, mi, faces, mood, collect(DISTINCT {id: u.id, text: u.text, text_en: u.text_en, t0: u.t0,
+            WITH m, mi, faces, unknown, mood, collect(DISTINCT {id: u.id, text: u.text, text_en: u.text_en, t0: u.t0,
                                                        t1: u.t1, tone: u.tone,
                                                        speaker: coalesce(sp.name, u.speaker_name)}) AS said
             OPTIONAL MATCH (m)-[:FEATURES]->(ob:Object)
             RETURN m.id AS id, m.start AS date, m.date_source AS date_source, m.summary AS summary,
                    m.event_type AS event_type, m.event_title AS event, m.place_type AS place,
                    mi.id AS sha, mi.path AS path, mi.kind AS kind, mi.duration_s AS duration,
-                   mi.width AS width, mi.height AS height, faces, mood, said,
+                   mi.width AS width, mi.height AS height, faces, unknown, mood, said,
                    collect(DISTINCT ob.name)[..6] AS objects
             ORDER BY m.start""").data()
     out = []
@@ -37,6 +43,7 @@ def moments(dataset: str = "demo", person_ids: list[str] | None = None) -> list[
         if dataset_of(r["path"]) != dataset:
             continue
         r["faces"] = [f for f in r["faces"] if f.get("id")]
+        r["unknown"] = [f for f in r["unknown"] if f.get("obs")]
         r["people"] = sorted({f["name"] for f in r["faces"]})
         r["mood"] = [x for x in r["mood"] if x.get("emotion")]
         r["said"] = [x for x in r["said"] if x.get("id") and x.get("text")]
@@ -53,6 +60,7 @@ def for_prompt(ms: list[dict]) -> list[dict]:
              "event": m["event"], "summary": m["summary"], "people": m["people"],
              "mood": [f"{x['emotion']} {x.get('intensity') or ''}".strip() for x in m["mood"]],
              "objects": m["objects"],
+             **({"unnamed_faces": len(m["unknown"])} if m.get("unknown") else {}),
              "voice_lines": [{"id": u["id"], "speaker": u["speaker"], "text": u["text"][:220],
                               **({"english": u["text_en"][:220]} if u.get("text_en") and u["text_en"] != u["text"]
                                  else {}),

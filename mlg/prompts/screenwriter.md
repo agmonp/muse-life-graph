@@ -25,6 +25,15 @@ RULES
 7. Respect `must_include` and `avoid`. Close on a moment that feels like home (family together).
 8. `emotion` per scene comes from the moment's mood; the arc should move (e.g. nostalgia ->
    joy -> tenderness), not stay flat.
+9. Follow the TEMPLATE's beats and rules; set `beat` on every scene.
+10. DOUBTS: the owner will be asked before the cut. Only when you are genuinely torn between
+   2-3 pictures for a key scene (the opening, the peak or the ending) add a doubt: a short
+   question, the options (moment ids, each with a 2-5 word label of what it shows) and the one
+   you put in the scene. At most 2 doubts; usually 0 or 1. Never ask about facts - only choices.
+   `unnamed_faces` counts faces the archive could not identify; the crew asks the owner about
+   those itself, so a moment with an unnamed face is still usable.
+
+{template}
 
 BRIEF: {brief}
 MOMENTS: {moments}
