@@ -65,7 +65,7 @@ from fastapi import Request  # noqa: E402
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse  # noqa: E402
 
 READ_ONLY = ("/api/answer", "/api/answer_group", "/api/undo", "/api/recheck", "/api/import", "/api/titles")
-OPEN = ("/bless/", "/api/bless/", "/app/logo.svg", "/enter")
+OPEN = ("/bless/", "/api/bless/", "/app/logo.svg", "/enter", "/api/gpu/")   # /api/gpu/ checks its own token
 CODE_PAGE = """<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Muse Life Graph</title><link rel="icon" href="/app/logo.svg">
 <body style="margin:0;min-height:100vh;display:grid;place-items:center;background:#f6f1ea;font:16px system-ui;color:#1e1916">
@@ -90,6 +90,36 @@ async def site_guard(request: Request, call_next):
                                            "Run Muse Life Graph on your own photos to name your people."},
                                 status_code=403)
     return await call_next(request)
+
+
+def _gpu_token(request: Request) -> None:
+    """The owner's GPU bridge proves itself with the site's access code (it runs on the owner's PC)."""
+    import hmac
+    if not site.CODE or not hmac.compare_digest(request.headers.get("x-gpu-token", ""), site.CODE):
+        raise HTTPException(401, "bad token")
+
+
+@app.get("/api/gpu/next")
+def gpu_next(request: Request):
+    from mlg import gpu_queue
+    _gpu_token(request)
+    return gpu_queue.next_batch() or {"id": None}
+
+
+@app.post("/api/gpu/result/{bid}")
+async def gpu_result(bid: str, request: Request):
+    from mlg import gpu_queue
+    _gpu_token(request)
+    if not gpu_queue.finish(bid, (await request.json())["results"]):
+        raise HTTPException(404, "no such batch (it may have timed out)")
+    return {"ok": True}
+
+
+@app.get("/api/gpu/status")
+def gpu_status():
+    from mlg import gpu_queue
+    from mlg.studio import sound
+    return {"mode": sound.MODE, "ready": sound._gpu_ready(), "pc_alive": gpu_queue.alive()}
 
 
 @app.post("/enter")

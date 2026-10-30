@@ -19,8 +19,9 @@ import modal
 
 ROOT = Path(__file__).resolve().parent.parent
 APP_NAME = "muse-life-graph"
-# GPU functions need a payment method on the Modal account; without one (MLG_DEPLOY_GPU unset) the site
-# still runs and its new films get on-screen captions instead of narration and score
+# The owner's own PC does the GPU work first, through scripts/gpu_bridge.py (free). With MLG_DEPLOY_GPU=1
+# (needs a payment method on the Modal account) a Modal A10G takes over while the PC is off; without it,
+# films made while the PC is off get on-screen captions instead of narration and score.
 GPU = os.environ.get("MLG_DEPLOY_GPU") == "1"
 app = modal.App(APP_NAME)
 site_vol = modal.Volume.from_name("mlg-site", create_if_missing=True)
@@ -33,7 +34,7 @@ web_image = (
     .apt_install("ffmpeg", "fonts-dejavu-core", "libraqm0")
     .pip_install_from_requirements(str(ROOT / "requirements.txt"))
     .pip_install("modal")
-    .env({"MLG_DATA": "/site/data", "MLG_SITE_MEDIA": "/site/media", "MLG_GPU": "modal" if GPU else "none",
+    .env({"MLG_DATA": "/site/data", "MLG_SITE_MEDIA": "/site/media", "MLG_GPU": "pc", "MLG_GPU_FALLBACK": "modal" if GPU else "none",
           "MLG_MODAL_APP": APP_NAME, "PYTHONPATH": "/app"})
     .add_local_dir(str(ROOT / "mlg"), "/app/mlg", ignore=["__pycache__", "*.pyc"])
 )

@@ -49,11 +49,30 @@ SYSTEM = (
     "nothing that would fight a spoken voice line.")
 
 
-REMOTE = os.environ.get("MLG_GPU") == "modal"   # the hosted site: Meta's audio models on a Modal GPU
+# where Meta's audio models run: here (.venv-gpu), on a Modal GPU, or on the owner's PC through the bridge
+MODE = os.environ.get("MLG_GPU") or "local"
+REMOTE = MODE == "modal"
+FALLBACK = os.environ.get("MLG_GPU_FALLBACK") == "modal"   # "pc" mode: a Modal GPU when the PC is off
+
+
+def _pc_alive() -> bool:
+    from mlg import gpu_queue
+    return gpu_queue.alive()
 
 
 def _gpu_ready() -> bool:
-    return REMOTE or GPU_PY.exists()
+    if MODE == "pc":
+        return _pc_alive() or FALLBACK
+    return REMOTE or (MODE == "local" and GPU_PY.exists())
+
+
+def _run_pc(todo: list[dict]) -> None:
+    from mlg import gpu_queue
+    for job, res in zip(todo, gpu_queue.run([{k: v for k, v in j.items() if k != "out"} for j in todo])):
+        if not res.get("ok"):
+            raise RuntimeError(f"GPU worker: {res.get('error')}")
+        Path(job["out"]).parent.mkdir(parents=True, exist_ok=True)
+        Path(job["out"]).write_bytes(res["wav"])
 
 
 def _run_remote(todo: list[dict]) -> None:
@@ -70,7 +89,16 @@ def _run(jobs: list[dict]) -> list[dict]:
     todo = [j for j in jobs if not Path(j["out"]).exists()]
     if todo and REMOTE:
         _run_remote(todo)
+    elif todo and MODE == "pc":
+        _run_pc(todo) if _pc_alive() or not FALLBACK else _run_remote(todo)
     elif todo:
+        run_local(todo)
+    return [{"out": j["out"], "seconds": sf.info(j["out"]).duration} for j in jobs]
+
+
+def run_local(todo: list[dict]) -> None:
+    """Run jobs on this computer's GPU worker (.venv-gpu); also what the bridge uses for the site."""
+    if todo:
         OUT.mkdir(parents=True, exist_ok=True)
         spec = OUT / f"jobs_{hashlib.sha1(json.dumps(todo).encode()).hexdigest()[:10]}.json"
         spec.write_text(json.dumps(todo), encoding="utf-8")
@@ -81,7 +109,6 @@ def _run(jobs: list[dict]) -> list[dict]:
                 raise RuntimeError(f"GPU worker: {res.get('error')}")
         if r.returncode != 0:
             raise RuntimeError(f"GPU worker failed: {r.stderr[-800:]}")
-    return [{"out": j["out"], "seconds": sf.info(j["out"]).duration} for j in jobs]
 
 
 def design(storyboard: dict, edl: dict) -> dict:
