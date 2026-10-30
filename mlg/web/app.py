@@ -133,9 +133,43 @@ async def enter(request: Request):
     return HTMLResponse(CODE_PAGE.replace("{msg}", '<p style="color:#c92a2a">That code is not right.</p>'), status_code=401)
 
 
+def _build() -> str:
+    """A fingerprint of the page's code: it changes with every deploy that touches the app."""
+    h = hashlib.md5()
+    for name in ("app.js", "app.css", "index.html"):
+        h.update((APP / name).read_bytes())
+    return h.hexdigest()[:10]
+
+
+BUILD = _build()
+
+
 @app.get("/")
 def index():
-    return FileResponse(APP / "index.html", headers={"Cache-Control": "no-cache"})
+    html = (APP / "index.html").read_text(encoding="utf-8")
+    html = (html.replace('/app/app.css"', f'/app/app.css?v={BUILD}"').replace('/app/app.js"', f'/app/app.js?v={BUILD}"')
+            .replace("<head>", f"<head>\n<script>window.BUILD = '{BUILD}';</script>", 1))
+    return Response(html, media_type="text/html", headers={"Cache-Control": "no-cache"})
+
+
+@app.get("/api/version")
+def api_version():
+    return {"build": BUILD}
+
+
+@app.on_event("startup")
+def warm_up():
+    """Work out the library, the memories and the people network once, before anyone asks."""
+    def run():
+        try:
+            from mlg import network
+            library.data()
+            library.memories()
+            network.build()
+            network.insights()
+        except Exception as e:  # noqa: BLE001 - the first visitor then computes it instead
+            print("warm-up failed:", e)
+    threading.Thread(target=run, daemon=True).start()
 
 
 @app.get("/app/{name}")

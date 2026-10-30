@@ -94,7 +94,20 @@ const ROUTES = {
   faces, add: addPage, search: searchPage,
 };
 let navToken = 0;
+// after a deploy the server's data can change shape: a page still running old code reloads itself
+let lastVersionCheck = 0;
+async function checkVersion() {
+  if (Date.now() - lastVersionCheck < 30000) return;
+  lastVersionCheck = Date.now();
+  try {
+    const v = await api('/api/version');
+    if (window.BUILD && v.build !== window.BUILD) location.reload();
+  } catch (e) { /* offline or restarting: try again on the next page */ }
+}
+document.addEventListener('visibilitychange', () => { if (!document.hidden) checkVersion(); });
+
 async function route() {
+  checkVersion();
   const h = location.hash.replace(/^#\/?/, '');
   const [path, qs] = h.split('?');
   const [name, ...rest] = path.split('/');
