@@ -16,3 +16,4 @@ soundfile>=0.12
 meta-sam-parser>=0.1.0
 pytest>=8.2
 opencv-python-headless>=4.10   # YuNet + SFace face fingerprints (models in data/models)
+networkx>=3.3                  # tie backbone, communities, bridges for the connections map

@@ -427,3 +427,38 @@ select.field { appearance: none; padding-right: 36px; background-image: linear-g
   .group { grid-template-columns: 1fr; }
   .gfaces { grid-template-columns: repeat(4, 1fr); max-height: 260px; }
 }
+
+/* ---------- connections map ---------- */
+.netwrap { display: grid; grid-template-columns: minmax(0, 1fr) 340px; gap: 18px; align-items: start; }
+.netwrap .graphwrap { height: calc(100vh - var(--top) - 190px); min-height: 520px; }
+.netside { padding: 20px; max-height: calc(100vh - var(--top) - 190px); min-height: 520px; overflow: auto; }
+.netside .withlist a { align-items: center; }
+.netside .withlist b { font-weight: 600; font-size: 14px; }
+.gtools { position: absolute; top: 14px; left: 14px; display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+.gtools .toggle { background: var(--surface); border: 1px solid var(--line); border-radius: 999px; padding: 4px 10px 4px 6px; }
+.gtools .toggle input { width: 32px; height: 20px; } .gtools .toggle input::after { width: 14px; height: 14px; }
+.gtools .toggle input:checked::after { transform: translateX(12px); }
+.island text { font: 700 15px var(--sans); letter-spacing: .01em; paint-order: stroke; stroke: var(--bg); stroke-width: 5px; }
+.island.dim { opacity: .25; }
+.gnode text { font: 600 12px var(--sans); fill: var(--ink); paint-order: stroke; stroke: var(--surface); stroke-width: 4px; display: none; }
+.gnode.big text, svg.zoomed .gnode text, .gnode.on text, .gnode:hover text { display: block; }
+.gnode.owner text { font-size: 14px; }
+.gnode .bridge-ring { fill: none; stroke: var(--ink-2); stroke-width: 2; stroke-dasharray: 3 4; }
+.gnode.on > circle:first-child { fill: var(--ink); }
+.gnode.dim { opacity: .12; }
+.gedge { opacity: .5; stroke-linecap: round; }
+.gedge.dim { opacity: .05; }
+.gedge.own { opacity: .18; }
+.ego { stroke-linecap: round; pointer-events: none; }
+.dot { width: 9px; height: 9px; border-radius: 50%; display: inline-block; }
+.tie { position: relative; display: flex; gap: 10px; align-items: center; padding: 6px; border-radius: 12px; text-decoration: none; }
+.tie:hover { background: var(--bg-2); }
+.tie img { width: 38px; height: 38px; border-radius: 50%; object-fit: cover; }
+.tie span { display: flex; flex-direction: column; min-width: 0; }
+.tie .bar { position: absolute; left: 54px; right: 8px; bottom: 2px; height: 3px; border-radius: 3px; background: var(--line); }
+.tie .bar::after { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: var(--w); border-radius: 3px; background: var(--accent); opacity: .7; }
+@media (max-width: 980px) {
+  .netwrap { grid-template-columns: 1fr; }
+  .netwrap .graphwrap { height: 62vh; min-height: 380px; }
+  .netside { max-height: none; min-height: 0; }
+}

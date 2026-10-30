@@ -69,7 +69,7 @@ def _load() -> tuple[list[dict], dict]:
             """).data()
         ppl = s.run("""MATCH (p:Person {confirmed: true})
                        RETURN p.id AS id, p.name AS name, p.relation AS relation, p.is_owner AS owner,
-                              p.ref_crop AS crop""").data()
+                              p.ref_crop AS crop, coalesce(p.groups, []) AS groups, p.name_en AS name_en""").data()
     albums = _albums()
     out = []
     for r in rows:

@@ -69,7 +69,7 @@ def main() -> None:
     print("media", counts, flush=True)
     data = OUT / "data" / "cache"
     data.mkdir(parents=True, exist_ok=True)
-    for name in ("memory_titles.json", "faces.sqlite"):
+    for name in ("memory_titles.json", "faces.sqlite", "circle_names.json"):
         if (CACHE / name).exists():
             shutil.copy(CACHE / name, data / name)
     # the ingest database carries album names, captions and the owner's identity answers; a clean copy via backup

@@ -1,6 +1,7 @@
 """Seed the people of this graph from the owner's earlier Life Graph (their own data, read-only).
 
     python scripts/seed_from_lifegraph.py people            # names + reference faces, no Muse calls
+    python scripts/seed_from_lifegraph.py attrs             # groups, family branch, relationship, English name
     python scripts/seed_from_lifegraph.py demo              # ~30 people, ~3,000 photos + videos, read in place
     python scripts/seed_from_lifegraph.py look [--limit N]  # Muse looks at the photos the earlier graph knows
     python scripts/seed_from_lifegraph.py link [--dry]      # name faces Muse found, when two keys agree
@@ -318,6 +319,31 @@ def look(limit: int | None, source: str | None = None, workers: int | None = Non
     print(f"done {done}, failed {failed}", flush=True)
 
 
+FAMILY_GROUP = {"Nuclear Family": "המשפחה הגרעינית", "Extended Family": "משפחה מורחבת", "Tobi Family": "טובי'ס"}
+
+
+def attrs() -> None:
+    """What the owner already said about each person in the earlier graph: their groups (set by hand), the
+    family branch, the relationship to the owner and an English name. Data only; read-only there."""
+    with session() as s:
+        here = s.run("MATCH (p:Person) WHERE p.source_lifegraph IS NOT NULL RETURN p.id AS id, p.source_lifegraph AS old").data()
+    by_old = {r["old"]: r["id"] for r in here}
+    with old_driver().session() as s:
+        rows = s.run("""MATCH (p:Person) WHERE p.id IN $ids RETURN p.id AS id, p.groups_manual AS groups,
+                        p.family_group AS family, p.relationship AS rel, p.name_en AS en, p.birth_year AS born""",
+                     ids=list(by_old)).data()
+    n = 0
+    with session() as s:
+        for r in rows:
+            groups = list(r["groups"] or []) or ([FAMILY_GROUP.get(r["family"], r["family"])] if r["family"] else [])
+            s.run("""MATCH (p:Person {id: $id}) SET p.groups = $groups, p.relation = coalesce($rel, p.relation),
+                     p.name_en = $en, p.birth_year = $born""",
+                  id=by_old[r["id"]], groups=groups, rel=r["rel"], en=r["en"], born=r["born"]).consume()
+            n += bool(groups)
+    library.invalidate()
+    print(f"people updated {len(rows)}, with a group {n}")
+
+
 def undo() -> None:
     with session() as s:
         n = s.run("MATCH (:Person)-[r:OBSERVED_AS {confirmed_by: 'lifegraph'}]->(o) "
@@ -331,7 +357,7 @@ def undo() -> None:
 
 if __name__ == "__main__":
     ap = argparse.ArgumentParser()
-    ap.add_argument("cmd", choices=["people", "demo", "look", "link", "undo"])
+    ap.add_argument("cmd", choices=["people", "attrs", "demo", "look", "link", "undo"])
     ap.add_argument("--people", type=int, default=30)
     ap.add_argument("--per", type=int, default=40)
     ap.add_argument("--cap", type=int, default=3000)
@@ -341,4 +367,4 @@ if __name__ == "__main__":
     ap.add_argument("--source", help="only files whose path contains this (e.g. facebook); !facebook = all but those")
     ap.add_argument("--workers", type=int)
     a = ap.parse_args()
-    {"people": seed_people, "demo": lambda: demo(a.people, a.per, a.cap, a.videos), "look": lambda: look(a.limit, a.source, a.workers), "link": lambda: link(a.dry), "undo": undo}[a.cmd]()
+    {"people": seed_people, "attrs": attrs, "demo": lambda: demo(a.people, a.per, a.cap, a.videos), "look": lambda: look(a.limit, a.source, a.workers), "link": lambda: link(a.dry), "undo": undo}[a.cmd]()

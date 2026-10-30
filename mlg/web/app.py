@@ -200,7 +200,20 @@ def api_person(pid: str):
 
 @app.get("/api/graph")
 def api_graph():
-    return library.graph()
+    from mlg import network
+    return network.build()
+
+
+@app.get("/api/ties/{pid}")
+def api_ties(pid: str):
+    from mlg import network
+    return _or404(network.ties_of(pid))
+
+
+@app.get("/api/insights")
+def api_insights():
+    from mlg import network
+    return network.insights()
 
 
 @app.get("/api/shared")
@@ -305,10 +318,14 @@ def api_people(dataset: str = "real"):
 
 @app.get("/api/ref/{pid}")
 def api_ref(pid: str, i: int = 0):
-    for p in people.roster():
-        if p["id"] == pid and p["crops"]:
-            return FileResponse(p["crops"][min(i, len(p["crops"]) - 1)])
-    raise HTTPException(404)
+    """A person's reference face (everyone, not only the 40 most-seen people the perceive prompt carries)."""
+    with session() as s:
+        r = s.run("MATCH (p:Person {id: $id}) RETURN [c IN [p.ref_crop] + coalesce(p.ref_crops, []) WHERE c IS NOT NULL] AS c",
+                  id=pid).single()
+    crops = [c for c in (site.local(x) for x in (r["c"] if r else [])) if c and Path(c).exists()]
+    if not crops:
+        raise HTTPException(404)
+    return FileResponse(crops[min(i, len(crops) - 1)], headers={"Cache-Control": "max-age=86400"})
 
 
 @app.get("/api/crop/{oid}")
