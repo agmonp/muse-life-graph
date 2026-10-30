@@ -301,9 +301,58 @@ def _queue(dataset: str) -> list[dict]:
 
 
 @app.get("/api/faces")
-def api_faces(dataset: str = "real", limit: int = 40):
+def api_faces(dataset: str = "real", limit: int = 40, unclear: bool = False):
     q = _queue(dataset)
+    if unclear:   # only the faces the fingerprint model could not read (profile, sunglasses, tiny, blurred)
+        from mlg import faces
+        con = faces._con()
+        ids = [f["id"] for f in q]
+        bad = {k for k, v in con.execute(f"SELECT key, v FROM vec WHERE key IN ({','.join('?' * len(ids))})", ids)
+               if v is None} if ids else set()
+        q = [f for f in q if f["id"] in bad]
     return {"total": len(q), "faces": q[:limit]}
+
+
+@app.get("/api/face_groups")
+def api_face_groups(limit: int = 30, per: int = 24):
+    from mlg import faces
+    g = faces.groups()
+    if g["waiting"] and not faces.JOB["running"]:
+        threading.Thread(target=faces.index, daemon=True).start()
+    people = {p["id"]: p for p in library.people_list()}
+    return {**g, "total_groups": len(g["groups"]),
+            "groups": [{**x, "faces": x["faces"][:per]} for x in g["groups"][:limit]],
+            "people": sorted(people.values(), key=lambda p: (-p["count"], p["name"]))}
+
+
+class GroupAnswer(BaseModel):
+    obs_ids: list[str]
+    action: str                 # confirm | skip | not_person
+    person_id: str | None = None
+    new_name: str | None = None
+
+
+@app.post("/api/answer_group")
+def api_answer_group(a: GroupAnswer):
+    """One answer for a whole group of faces: the first one creates the person if needed."""
+    if not a.obs_ids:
+        raise HTTPException(400, "no faces chosen")
+    pid, done = a.person_id, []
+    for oid in a.obs_ids:
+        try:
+            if a.action == "confirm":
+                pid = identity.confirm_face(oid, pid, None if pid else a.new_name)
+            elif a.action in ("skip", "not_person"):
+                with session() as s:
+                    s.run("MATCH (o:Observation {id: $oid}) SET o.user_action = $a", oid=oid, a=a.action).consume()
+                identity.record(oid, a.action, pid)
+            else:
+                raise HTTPException(400, "unknown action")
+            done.append(oid)
+        except ValueError:
+            continue   # a face that cannot be cropped any more; the rest still count
+    library.invalidate()
+    return {"ok": True, "person_id": pid, "done": done}
 
 
 class Answer(BaseModel):

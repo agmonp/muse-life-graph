@@ -247,6 +247,12 @@ def start_looking(limit: int | None = None) -> dict:
                 with _LOCK:
                     JOB["done"] = JOB.get("done", 0) + 1
         library.invalidate()
+        _set(step="faces")
+        try:
+            from mlg import faces
+            faces.index()     # fingerprints, so "Who is this?" can group the new faces
+        except Exception as e:  # noqa: BLE001 - grouping is a help, not a must
+            _set(error=f"faces: {e}")
         _set(step="titles")
         try:
             library.write_titles()

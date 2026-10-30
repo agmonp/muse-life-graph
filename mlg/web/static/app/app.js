@@ -538,13 +538,89 @@ afterRender.search = () => {
 };
 
 /* ---------------- who is this ---------------- */
-let FACES = {faces: [], total: 0}, PEOPLE = [];
-async function faces() {
-  [FACES, PEOPLE] = await Promise.all([api('/api/faces?limit=30'), api('/api/people')]);
-  return `<div class="phead"><div><div class="eyebrow">Who is this?</div><h1>Help Muse know your people</h1>
-      <p>Muse links a face to a name only when two checks agree; everything else waits for you. Each face you confirm teaches it.</p></div>
-      <div style="min-width:240px"><div class="small muted" id="facecount">${FACES.total} faces to go</div>
-        <button class="btn sm" id="recheck" style="margin-top:8px">${ic('sparkle')}Re-check with what I taught</button></div></div>
+let FACES = {faces: [], total: 0}, PEOPLE = [], GROUPS = null;
+async function faces(_, params) {
+  if (params.get('unclear')) return unclearFaces();
+  GROUPS = await api('/api/face_groups');
+  const g = GROUPS, named = g.open - g.no_fingerprint - g.waiting;
+  return `<div class="phead"><div><div class="eyebrow">Who is this?</div><h1>Name a face once, name it everywhere</h1>
+      <p>Faces that look like the same person are grouped, so one answer names all of them. Every card is a different person.
+      A name is suggested only when the faces really match someone you already named.</p></div>
+      <div style="min-width:240px"><div class="statline" style="margin:0"><div><b id="gleft">${g.total_groups}</b><span>people to name</span></div>
+        <div><b>${named}</b><span>faces in them</span></div></div>
+        ${g.waiting ? `<div class="small muted" style="margin-top:8px">Reading ${g.waiting} new faces…</div>` : ''}</div></div>
+    <div id="grouplist" style="display:flex;flex-direction:column;gap:18px"></div>
+    ${g.no_fingerprint ? `<div class="section card pad" style="display:flex;justify-content:space-between;align-items:center;gap:14px;flex-wrap:wrap">
+      <div><h3>${g.no_fingerprint} faces were too unclear to group</h3><div class="small muted">Sunglasses, profiles, tiny or blurred faces. You can still name them one by one.</div></div>
+      <a class="btn" href="#/faces?unclear=1">Name them one by one</a></div>` : ''}`;
+}
+function groupHtml(x) {
+  const s = x.suggest, years = [...new Set(x.faces.map(f => f.date.slice(0, 4)).filter(Boolean))].sort();
+  const span = years.length ? ` · ${years[0]}${years.length > 1 ? '–' + years.at(-1) : ''}` : '';
+  const q = s ? (s.strong ? `Is this ${esc(s.name)}?` : `Could this be ${esc(s.name)}?`) : 'Who is this?';
+  return `<article class="card group" data-g="${esc(x.id)}">
+    <div class="gfaces">${x.faces.map(f => `<button class="gface" data-o="${esc(f.id)}" title="Tap to leave this face out">
+      <img src="/api/crop/${enc(f.id)}" alt="face" loading="lazy"><span>${ic('close')}</span></button>`).join('')}
+      ${x.size > x.faces.length ? `<div class="gmore">+${x.size - x.faces.length}</div>` : ''}</div>
+    <div class="body">
+      <div class="small faint">${x.size} ${x.size === 1 ? 'face' : 'faces'} · ${x.photos} ${x.photos === 1 ? 'picture' : 'pictures'}${span}</div>
+      <div class="guess" dir="auto">${q}</div>
+      ${x.size > 1 ? '<div class="small muted">Tap a face that is someone else to leave it out.</div>' : ''}
+      <div class="acts">${s ? `<button class="btn primary" data-a="yes">${ic('check')}Yes, ${esc(s.name)}</button>` : ''}
+        <button class="btn" data-a="skip">Skip</button><button class="btn ghost" data-a="not">Not a real person</button></div>
+      <div class="peoplepick">${GROUPS.people.filter(p => !s || p.id !== s.id).map(p => `<button data-pid="${esc(p.id)}">${avatar(p)}${esc(p.name)}</button>`).join('')}</div>
+      <form class="newname" style="display:flex;gap:8px"><input class="field" placeholder="Someone new — type their name" dir="auto" aria-label="New name">
+        <button class="btn">Add</button></form></div></article>`;
+}
+function drawGroups() {
+  const list = GROUPS.groups;
+  $('#grouplist').innerHTML = list.length ? list.map(groupHtml).join('')
+    : '<div class="empty card"><h2>Everyone is named</h2><p>Muse will ask again when new pictures arrive.</p></div>';
+  if ($('#gleft')) $('#gleft').textContent = GROUPS.total_groups;
+}
+afterRender.faces = (_, params) => {
+  if (params.get('unclear')) return afterUnclear();
+  drawGroups();
+  const send = async (card, body, label) => {
+    const ids = $$('.gface:not(.off)', card).map(b => b.dataset.o);
+    if (!ids.length) return toast('Every face is left out — nothing to save');
+    card.style.opacity = .35;
+    try {
+      const r = await api('/api/answer_group', {obs_ids: ids, ...body});
+      if (OV) OV.unknown_faces = Math.max(0, OV.unknown_faces - r.done.length);
+      shell('faces');
+      toast(`${label} · ${r.done.length} ${r.done.length === 1 ? 'face' : 'faces'}`, async () => {
+        for (const id of r.done) await api('/api/undo', {obs_id: id});
+        route();
+      });
+      card.remove();
+      // names just given make the next suggestions better: regroup with them
+      GROUPS = await api('/api/face_groups');
+      drawGroups();
+    } catch (e) { card.style.opacity = 1; toast(e.message); }
+  };
+  $('#grouplist').onclick = e => {
+    const card = e.target.closest('[data-g]'); if (!card) return;
+    const x = GROUPS.groups.find(g => g.id === card.dataset.g);
+    const f = e.target.closest('.gface'); if (f) { f.classList.toggle('off'); return; }
+    const b = e.target.closest('button'); if (!b || b.type === 'submit') return;
+    if (b.dataset.pid) { const p = GROUPS.people.find(q => q.id === b.dataset.pid); return send(card, {action: 'confirm', person_id: p.id}, `Saved: ${p.name}`); }
+    if (b.dataset.a === 'yes') return send(card, {action: 'confirm', person_id: x.suggest.id}, `Saved: ${x.suggest.name}`);
+    if (b.dataset.a === 'skip') return send(card, {action: 'skip'}, 'Skipped');
+    if (b.dataset.a === 'not') return send(card, {action: 'not_person'}, 'Not a person');
+  };
+  $('#grouplist').onsubmit = e => {
+    e.preventDefault(); const name = $('input', e.target).value.trim();
+    if (name) send(e.target.closest('[data-g]'), {action: 'confirm', new_name: name}, `Added ${name}`);
+  };
+};
+
+async function unclearFaces() {
+  [FACES, PEOPLE] = await Promise.all([api('/api/faces?limit=30&unclear=1'), api('/api/people')]);
+  return `<a class="back" href="#/faces">${ic('back')}Groups</a>
+    <div class="phead"><div><div class="eyebrow">Who is this?</div><h1>The unclear faces</h1>
+      <p>Muse found a person here, but the face is turned away, covered or small, so it can't be grouped. Name the ones you recognise.</p></div>
+      <div class="small muted" id="facecount">${FACES.total} faces to go</div></div>
     <div id="facelist" style="display:flex;flex-direction:column;gap:18px"></div>`;
 }
 function faceHtml(f) {
@@ -553,19 +629,17 @@ function faceHtml(f) {
     <div class="imgs"><img class="face" src="/api/crop/${enc(f.id)}" alt="face" loading="lazy">
       <img class="ctx" data-m="${esc(f.sha)}" src="${photo(f.sha)}" alt="whole picture" loading="lazy"></div>
     <div class="body"><div class="small faint" dir="auto">${esc(where)}</div>
-      ${f.cand ? `<div class="guess" dir="auto">Is this ${esc(f.cand_name || f.cand)}?</div><div class="small muted" dir="auto">${esc(f.vreason || '')}</div>`
-               : `<div class="guess">Who is this?</div><div class="small muted" dir="auto">${esc(f.appearance || '')}</div>`}
-      <div class="acts">${f.cand ? `<button class="btn primary" data-a="yes">${ic('check')}Yes, ${esc(f.cand_name || '')}</button>` : ''}
-        <button class="btn" data-a="skip">Skip</button><button class="btn ghost" data-a="not">Not a person</button></div>
+      <div class="guess">Who is this?</div><div class="small muted" dir="auto">${esc(f.appearance || '')}</div>
+      <div class="acts"><button class="btn" data-a="skip">Skip</button><button class="btn ghost" data-a="not">Not a person</button></div>
       <div class="peoplepick">${PEOPLE.map(p => `<button data-pid="${esc(p.id)}">${avatar(p)}${esc(p.name)}</button>`).join('')}</div>
       <form class="newname" style="display:flex;gap:8px"><input class="field" placeholder="Someone new — type their name" dir="auto" aria-label="New name">
         <button class="btn">Add</button></form></div></article>`;
 }
 function drawFaces() {
-  $('#facelist').innerHTML = FACES.faces.length ? FACES.faces.map(faceHtml).join('') : '<div class="empty card"><h2>Everyone is named</h2><p>Muse will ask again when new pictures arrive.</p></div>';
+  $('#facelist').innerHTML = FACES.faces.length ? FACES.faces.map(faceHtml).join('') : '<div class="empty card"><h2>Nothing left here</h2></div>';
   $('#facecount').textContent = `${FACES.total} faces to go`;
 }
-afterRender.faces = () => {
+function afterUnclear() {
   drawFaces();
   const answer = async (card, body, label) => {
     card.style.opacity = .35;
@@ -577,15 +651,13 @@ afterRender.faces = () => {
       toast(label, async () => { await api('/api/undo', {obs_id: id}); route(); });
       card.remove(); $('#facecount').textContent = `${FACES.total} faces to go`; shell('faces');
       if (body.new_name) PEOPLE = await api('/api/people');
-      if (FACES.faces.length < 5 && FACES.total > FACES.faces.length) { FACES = await api('/api/faces?limit=30'); drawFaces(); }
+      if (FACES.faces.length < 5 && FACES.total > FACES.faces.length) { FACES = await api('/api/faces?limit=30&unclear=1'); drawFaces(); }
     } catch (e) { card.style.opacity = 1; toast(e.message); }
   };
   $('#facelist').onclick = e => {
     const card = e.target.closest('[data-f]'); if (!card) return;
-    const f = FACES.faces.find(x => x.id === card.dataset.f);
     const b = e.target.closest('button'); if (!b || b.type === 'submit') return;
     if (b.dataset.pid) { const p = PEOPLE.find(x => x.id === b.dataset.pid); return answer(card, {action: 'confirm', person_id: b.dataset.pid}, `Saved: ${p.name}`); }
-    if (b.dataset.a === 'yes') return answer(card, {action: 'confirm', person_id: f.cand}, `Saved: ${f.cand_name}`);
     if (b.dataset.a === 'skip') return answer(card, {action: 'skip'}, 'Skipped');
     if (b.dataset.a === 'not') return answer(card, {action: 'not_person'}, 'Marked as not a person');
   };
@@ -593,13 +665,7 @@ afterRender.faces = () => {
     e.preventDefault(); const name = $('input', e.target).value.trim();
     if (name) answer(e.target.closest('[data-f]'), {action: 'confirm', new_name: name}, `Added ${name}`);
   };
-  $('#recheck').onclick = async () => {
-    const b = $('#recheck'); b.disabled = true;
-    let st = await api('/api/recheck', {});
-    while (st.running) { b.textContent = `Checking ${st.done}/${st.total}…`; await new Promise(r => setTimeout(r, 1500)); st = await api('/api/recheck'); }
-    toast(`Recognised ${st.matched}, ${st.proposed} new suggestions`); route();
-  };
-};
+}
 
 /* ---------------- films ---------------- */
 const CREW_COLORS = {Researcher: '#6d4c74', Producer: '#2f7d5b', Screenwriter: '#d9542a', Director: '#1e1916', 'Picture checker': '#b7791f',

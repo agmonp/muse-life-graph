@@ -32,7 +32,7 @@ CREATE INDEX IF NOT EXISTS items_sha ON items(sha256);
 
 def connect(db: Path = DB) -> sqlite3.Connection:
     db.parent.mkdir(parents=True, exist_ok=True)
-    con = sqlite3.connect(db)
+    con = sqlite3.connect(db, timeout=30)   # the app reads while an import writes
     con.row_factory = sqlite3.Row
     con.executescript(SCHEMA)
     return con
