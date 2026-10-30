@@ -1,6 +1,7 @@
 """Seed the people of this graph from the owner's earlier Life Graph (their own data, read-only).
 
     python scripts/seed_from_lifegraph.py people            # names + reference faces, no Muse calls
+    python scripts/seed_from_lifegraph.py demo              # ~30 people, ~3,000 photos + videos, read in place
     python scripts/seed_from_lifegraph.py look [--limit N]  # Muse looks at the photos the earlier graph knows
     python scripts/seed_from_lifegraph.py link [--dry]      # name faces Muse found, when two keys agree
     python scripts/seed_from_lifegraph.py undo              # remove every link this script made
@@ -45,8 +46,8 @@ MIN_PHOTOS = 5
 SOLO_REFS = 12
 PHOTO_MAP = CACHE / "lifegraph_photo_people.json"
 CROPS = DATA / "people"
-LINK_WITH_PHOTO = 0.40     # fingerprint match + the earlier graph saw them in this photo
-LINK_ALONE = 0.60          # fingerprint match alone, also needs a clear margin over the next person
+LINK_WITH_PHOTO = 0.50     # fingerprint match + the earlier graph saw them in this photo
+LINK_ALONE = 0.62          # fingerprint match alone, also needs a clear margin over the next person
 MARGIN = 0.10
 
 
@@ -169,39 +170,116 @@ def link(dry: bool) -> None:
     people = faces._people_vectors(con, obs)
     open_ = [o for o in obs if not o["person"] and not o["action"]]
     vecs = faces._vectors(con, [o["id"] for o in open_])
-    n_photo = n_alone = 0
+    # per photo: every face scored against every person, then the best pairs first - one face per person
+    # and one person per face in a photo (the earlier graph says who is in it, not which face)
+    by_photo = defaultdict(list)
     for o in open_:
-        v = vecs.get(o["id"])
-        if v is None:
-            continue
-        scores = sorted(((float(np.mean(np.sort(m @ v)[-3:])), pid) for pid, m in people.items()), reverse=True)
-        if not scores:
-            continue
-        (best, pid), second = scores[0], scores[1][0] if len(scores) > 1 else 0.0
-        seen_here = pid in photo_map.get(fb_id(o["path"]), [])
-        if seen_here and best >= LINK_WITH_PHOTO:
-            how = "photo"
-        elif best >= LINK_ALONE and best - second >= MARGIN:
-            how = "alone"
-        else:
-            continue
-        n_photo += how == "photo"
-        n_alone += how == "alone"
-        if dry:
-            continue
-        with session() as s:
-            s.run("""MATCH (o:Observation {id: $oid}), (p:Person {id: $pid})
-                     MERGE (p)-[r:OBSERVED_AS]->(o)
-                     SET r.confidence = $c, r.confirmed_by = 'lifegraph', r.rationale = $why""",
-                  oid=o["id"], pid=pid, c=round(best, 3),
-                  why=f"face match {best:.2f}" + (" and the earlier Life Graph saw them in this photo" if how == "photo" else
-                                                  f", next person {second:.2f}")).consume()
-        identity.record(o["id"], "auto", pid)
+        if o["id"] in vecs:
+            by_photo[o["sha"]].append(o)
+    n_photo = n_alone = 0
+    for sha, group in by_photo.items():
+        here = set(photo_map.get(fb_id(group[0]["path"]), []))
+        pairs = []
+        for o in group:
+            v = vecs[o["id"]]
+            scores = sorted(((float(np.mean(np.sort(m @ v)[-3:])), pid) for pid, m in people.items()), reverse=True)
+            if not scores:
+                continue
+            second = scores[1][0] if len(scores) > 1 else 0.0
+            for sc, pid in scores[:8]:
+                if pid in here and sc >= LINK_WITH_PHOTO:
+                    pairs.append((sc, o, pid, "photo", second))
+                elif sc == scores[0][0] and sc >= LINK_ALONE and sc - second >= MARGIN:
+                    pairs.append((sc, o, pid, "alone", second))
+        used_faces, used_people = set(), set()
+        for sc, o, pid, how, second in sorted(pairs, key=lambda t: -t[0]):
+            if o["id"] in used_faces or pid in used_people:
+                continue
+            used_faces.add(o["id"])
+            used_people.add(pid)
+            n_photo += how == "photo"
+            n_alone += how == "alone"
+            if dry:
+                continue
+            with session() as s:
+                s.run("""MATCH (o:Observation {id: $oid}), (p:Person {id: $pid})
+                         MERGE (p)-[r:OBSERVED_AS]->(o)
+                         SET r.confidence = $c, r.confirmed_by = 'lifegraph', r.rationale = $why""",
+                      oid=o["id"], pid=pid, c=round(sc, 3),
+                      why=f"face match {sc:.2f}" + (" and the earlier Life Graph saw them in this photo" if how == "photo"
+                                                    else f", next person {second:.2f}")).consume()
+            identity.record(o["id"], "auto", pid)
     library.invalidate()
     print(f"{'would link' if dry else 'linked'}: {n_photo} with the photo as second key, {n_alone} by a strong match alone")
 
 
-def look(limit: int | None) -> None:
+def demo(people_n: int, per_person: int, cap: int, videos: int) -> None:
+    """A demo library from the earlier graph: the owner's closest people, photos of each spread over the
+    years, the other photos of the same days, and some videos. Files are read in place (the earlier
+    graph's reduced copies on C:, videos from the phone folder); dates come from the earlier graph."""
+    from mlg.ingest.scan import connect, ingest_file, mark_duplicates
+    drv = old_driver()
+    with drv.session() as s:
+        top = s.run("""MATCH (p:Person)-[a:APPEARS_IN]->(ev:Event) WHERE p.name IS NOT NULL AND NOT p.name STARTS WITH 'unknown'
+                       AND coalesce(p.hidden, false) = false AND ev.source_path IS NOT NULL
+                       WITH p, count(DISTINCT ev) AS c ORDER BY c DESC LIMIT $n RETURN p.id AS id""", n=people_n).data()
+        ids = [r["id"] for r in top]
+        evs = s.run("""MATCH (p:Person)-[:APPEARS_IN]->(ev:Event) WHERE p.id IN $ids
+                       RETURN ev.id AS id, ev.taken_at AS t, ev.source_path AS path, ev.video_path AS video,
+                              ev.taken_at_source AS src, collect(DISTINCT p.id) AS who""", ids=ids).data()
+    small = OLD / "data" / "photos_small"
+
+    def file_of(e):
+        if e["video"]:
+            return Path(e["video"]) if Path(e["video"]).exists() else None
+        f = small / e["id"][:2] / f"{e['id']}.jpg"
+        return f if f.exists() else None
+
+    evs = [e for e in evs if e["t"] and file_of(e)]
+    by_id = {e["id"]: e for e in evs}
+    chosen: dict[str, dict] = {}
+    for pid in ids:
+        mine = sorted((e for e in evs if pid in e["who"] and not e["video"]), key=lambda e: e["t"])
+        # spread over the years: the photos with the most of the chosen people first, a few from each year
+        years = defaultdict(list)
+        for e in mine:
+            years[e["t"][:4]].append(e)
+        per_year = max(1, per_person // max(1, len(years)))
+        for y, es in years.items():
+            for e in sorted(es, key=lambda e: -len(e["who"]))[:per_year]:
+                chosen[e["id"]] = e
+    days = defaultdict(list)
+    for e in evs:
+        days[e["t"][:10]].append(e)
+    for d in sorted({e["t"][:10] for e in chosen.values()}):
+        for e in days[d]:
+            if len(chosen) >= cap:
+                break
+            if not e["video"]:
+                chosen.setdefault(e["id"], e)
+    vids = sorted((e for e in evs if e["video"]), key=lambda e: (-len(e["who"]), e["t"]))[:videos]
+    for e in vids:
+        chosen[e["id"]] = e
+    print(f"people {len(ids)}, photos {sum(1 for e in chosen.values() if not e['video'])}, videos {len(vids)}", flush=True)
+    con = connect()
+    photo_map = json.loads(PHOTO_MAP.read_text(encoding="utf-8")) if PHOTO_MAP.exists() else {}
+    for n, e in enumerate(chosen.values(), 1):
+        f = file_of(e)
+        ingest_file(con, f)
+        # a time of day means the camera kept it; midnight/noon dates were estimated by the earlier graph
+        exact = len(e["t"]) > 10 and e["t"][11:19] not in ("00:00:00", "12:00:00")
+        con.execute("UPDATE items SET taken_at=?, date_source=? WHERE path=?",
+                    (e["t"][:19], (e["src"] or "exif") if exact else "content", str(f)))
+        photo_map[fb_id(str(f))] = [new_id(w) for w in e["who"]]
+        if n % 200 == 0:
+            con.commit()
+            print(f"{n}/{len(chosen)}", flush=True)
+    con.commit()
+    PHOTO_MAP.write_text(json.dumps(photo_map, ensure_ascii=False), encoding="utf-8")
+    print(f"brought in {len(chosen)}, copies set aside {mark_duplicates(con)}", flush=True)
+
+
+def look(limit: int | None, source: str | None = None, workers: int | None = None) -> None:
     """Muse looks at the Facebook photos the earlier graph knows people in. Each call carries only the
     reference faces of the people likely to be there (those, else the owner), not the whole roster."""
     from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -219,10 +297,12 @@ def look(limit: int | None) -> None:
         p = everyone.get(pid) or {**names.get(pid, {"id": pid, "name": pid}), "crops": refs.get(pid, [])}
         return {**p, "crops": refs.get(pid, p.get("crops", []))}
 
-    items = [it for it in imports._waiting_items() if fb_id(it["path"]) in photo_map][:limit]
+    items = [it for it in imports._waiting_items() if fb_id(it["path"]) in photo_map
+             and (not source or (source[1:].lower() not in it["path"].lower() if source.startswith("!")
+                                 else source.lower() in it["path"].lower()))][:limit]
     print(f"{len(items)} items", flush=True)
     done = failed = 0
-    with ThreadPoolExecutor(imports.WORKERS) as ex:
+    with ThreadPoolExecutor(workers or imports.WORKERS) as ex:
         futs = {ex.submit(perceive_item, it, [person(p) for p in (photo_map[fb_id(it["path"])][:6] or [OWNER_NEW_ID])]): it
                 for it in items}
         for f in as_completed(futs):
@@ -251,8 +331,14 @@ def undo() -> None:
 
 if __name__ == "__main__":
     ap = argparse.ArgumentParser()
-    ap.add_argument("cmd", choices=["people", "look", "link", "undo"])
+    ap.add_argument("cmd", choices=["people", "demo", "look", "link", "undo"])
+    ap.add_argument("--people", type=int, default=30)
+    ap.add_argument("--per", type=int, default=40)
+    ap.add_argument("--cap", type=int, default=3000)
+    ap.add_argument("--videos", type=int, default=80)
     ap.add_argument("--dry", action="store_true")
     ap.add_argument("--limit", type=int)
+    ap.add_argument("--source", help="only files whose path contains this (e.g. facebook); !facebook = all but those")
+    ap.add_argument("--workers", type=int)
     a = ap.parse_args()
-    {"people": seed_people, "look": lambda: look(a.limit), "link": lambda: link(a.dry), "undo": undo}[a.cmd]()
+    {"people": seed_people, "demo": lambda: demo(a.people, a.per, a.cap, a.videos), "look": lambda: look(a.limit, a.source, a.workers), "link": lambda: link(a.dry), "undo": undo}[a.cmd]()

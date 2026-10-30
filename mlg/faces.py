@@ -83,6 +83,9 @@ def embed(img) -> tuple[np.ndarray, float] | None:
         # the face Muse meant is the big one near the middle of its box
         cx, cy = w / 2, h / 2
         best = max(found, key=lambda f: f[14] * (f[2] * f[3]) / (1 + ((f[0] + f[2] / 2 - cx) ** 2 + (f[1] + f[3] / 2 - cy) ** 2) / (w * h)))
+        # Muse's box holds two people of similar size: which face it meant is a guess, so give no fingerprint
+        if sum(1 for f in found if f[14] >= 0.7 and f[2] * f[3] >= 0.5 * best[2] * best[3]) > 1:
+            return None
         aligned = rec.alignCrop(bgr, best)
         v = rec.feature(aligned).flatten().astype(np.float32)
     return v / (np.linalg.norm(v) + 1e-9), float(best[14])
