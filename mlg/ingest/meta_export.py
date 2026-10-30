@@ -113,15 +113,18 @@ def save_context(con: sqlite3.Connection, path: Path, info: MediaInfo) -> None:
                  info.place, info.lat, info.lon, info.uploaded))
 
 
-def extract(zips: list[Path], albums: list[str], limit: int | None, videos: int, out: Path,
-            db: Path = DB) -> dict:
+def extract(zips: list[Path], albums: list[str] | None, limit: int | None, videos: int, out: Path,
+            db: Path = DB, progress=None) -> dict:
+    """albums=None takes everything (the app's one-button import); a list takes those albums only."""
     media = parse(zips)
     where = _zip_for(zips)
-    wanted = [m for m in media.values() if m.album in albums and not m.zip_path.endswith((".mp4", ".mov"))]
+    wanted = [m for m in media.values() if (albums is None or m.album in albums)
+              and not m.zip_path.endswith((".mp4", ".mov"))]
     wanted.sort(key=lambda m: m.uploaded)
     if limit:
         wanted = wanted[:limit]
-    vids = sorted((m for m in media.values() if m.zip_path.endswith((".mp4", ".mov")) and m.captions),
+    vids = sorted((m for m in media.values() if m.zip_path.endswith((".mp4", ".mov"))
+                   and (albums is None or m.captions)),
                   key=lambda m: m.uploaded, reverse=True)[:videos]
     con = connect(db)
     n = 0
@@ -141,6 +144,10 @@ def extract(zips: list[Path], albums: list[str], limit: int | None, videos: int,
                 con.execute("UPDATE items SET taken_at=?, date_source='upload' WHERE path=?",
                             (info.uploaded, str(dest)))
         n += 1
+        if n % 25 == 0:
+            con.commit()
+            if progress:
+                progress(n)
     con.commit()
     return {"extracted": n, "duplicates": mark_duplicates(con)}
 

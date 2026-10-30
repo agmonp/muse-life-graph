@@ -1,6 +1,6 @@
 """One sentence -> a film, made by the crew and revised once after the critic watches it.
 
-    python -m mlg.studio.make "A 60-second film for grandma Ruth's 70th ..." [--dataset demo]
+    python -m mlg.studio.make "A 60-second film for grandma Ruth's 70th ..." [--dataset real]
 
 Pipeline (each step reports to the crew log the Edit Room shows live):
   Researcher -> Producer -> Screenwriter -> script check -> Picture Checker -> Editor
@@ -109,7 +109,7 @@ def _scenes(sb: dict) -> list[dict]:
              "emotion": s.get("emotion"), "moments": list(s["moment_ids"])} for s in sb["script"]["scenes"]]
 
 
-def make(request: str, dataset: str = "demo", film_id: str | None = None,
+def make(request: str, dataset: str = "real", film_id: str | None = None,
          on_start: Callable[[str], None] | None = None, template: str | None = None,
          ask_wait: float = 0) -> dict:
     """ask_wait: seconds the crew waits for the owner's answers (0 = don't ask, use the crew's picks)."""
@@ -200,7 +200,7 @@ def make(request: str, dataset: str = "demo", film_id: str | None = None,
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("request")
-    ap.add_argument("--dataset", default="demo")
+    ap.add_argument("--dataset", default="real")
     ap.add_argument("--template", choices=["birthday", "wedding", "friends", "family"])
     ap.add_argument("--ask-wait", type=float, default=0,
                     help="seconds to wait for answers in the Edit Room (0 = the crew decides)")

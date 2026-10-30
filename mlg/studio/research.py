@@ -11,7 +11,7 @@ from mlg.graph.db import session
 from mlg.people import dataset_of
 
 
-def moments(dataset: str = "demo", person_ids: list[str] | None = None) -> list[dict]:
+def moments(dataset: str = "real", person_ids: list[str] | None = None) -> list[dict]:
     with session() as s:
         rows = s.run("""
             MATCH (m:Moment)-[:DEPICTED_IN]->(mi:MediaItem)

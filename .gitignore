@@ -12,3 +12,6 @@ data/audio/
 neo4j-data/
 data/people/
 data/films/
+
+data/_removed*/
+data/logs/

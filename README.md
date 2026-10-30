@@ -39,16 +39,17 @@ Copy-Item .env.example .env   # then fill in keys
 
 ## Phase 2 (built 2026-10-26): perceive -> graph
 
+The fictional "Cohen family" demo set used during phases 2-7 was removed on 2026-10-27; the app now works on the
+owner's own photos only (added from a folder or a Facebook / Instagram export).
+
 | Module | What it does |
 |---|---|
 | `mlg/people.py` | Known people with reference crops (`python -m mlg.people add/list`) |
 | `mlg/perceive/run.py` | One Muse call per item: rules prompt + known people's reference photos + same-day moments + the media. Photos as images, videos as keyframes + audio track, audio as audio + diarized transcript |
 | `mlg/perceive/critic.py` | Code-enforced rules: drop claims without evidence, cap inferred confidence, cap voice-only identities and turn them into questions |
 | `mlg/graph/write.py` | Idempotent per-item sub-graph: MediaItem, Moment, Observations, Objects, Activities, Utterances, typed edges with evidence |
-| `scripts/make_demo_set.py` | A fictional family generated with Muse Image (consistent faces from one reference photo) |
 
 ```powershell
-.\.venv\Scripts\python.exe scripts\make_demo_set.py
 .\.venv\Scripts\python.exe -m mlg.ingest.scan data\demo
 .\.venv\Scripts\python.exe -m mlg.perceive.run --workers 6
 ```
@@ -66,11 +67,14 @@ Copy-Item .env.example .env   # then fill in keys
 | `mlg/studio/sound.py`, `gpu_worker.py` | Narrator (Meta SeamlessM4T v2) and score (Meta MusicGen medium) on the local GPU |
 | `mlg/studio/critic.py` | Critic: Muse Wonder watches the draft and gives notes the editor applies; it scores v1 and v2 |
 | `mlg/shema/blessings.py` | Blessings through a link: Voice Transcribe + Muse Spark pick the film-worthy lines |
-| `mlg/web/` | Edit Room (`/studio`), "Who is this?" (`/`), blessing page (`/bless/<token>`) |
+| `mlg/library.py` | Memories (moments that belong together, titled by Muse Spark), timeline, people, who-appears-with-whom |
+| `mlg/search.py` | Search and ask in any language: Muse Spark reads the question, a full-text index over what Muse saw ranks the moments, Spark answers with citations |
+| `mlg/imports.py` | Add photos: a folder on this computer or a Facebook / Instagram export (.zip); copies set aside, cost shown before Muse looks |
+| `mlg/web/` | The app at `/`: home, memories, timeline, people, connections, search, films (the Edit Room), "Who is this?", add photos; blessing page `/bless/<token>` |
 | `scripts/evals.py` | Measurements -> [docs/EVALS.md](docs/EVALS.md) |
 
 ```powershell
-.\.venv\Scripts\python.exe -m uvicorn mlg.web.app:app --port 8800       # then open /studio
+.\.venv\Scripts\python.exe -m uvicorn mlg.web.app:app --port 8800       # then open http://localhost:8800
 .\.venv\Scripts\python.exe -m mlg.studio.make "A 60-second film for grandma Ruth's 70th" --template birthday
 .\.venv\Scripts\python.exe scripts\evals.py --films 6
 ```

@@ -304,7 +304,7 @@ def _join_neighbour(script: dict, known: dict, order: int) -> str:
     return f"scene {order}: no spare photo of the honoree - blessing moved over scene {host['order']}'s photos"
 
 
-def plan(request: str, dataset: str = "demo", template: str | None = None) -> dict:
+def plan(request: str, dataset: str = "real", template: str | None = None) -> dict:
     t0 = time.perf_counter()
     ms = research.moments(dataset)
     brief = produce(request, dataset, ms)

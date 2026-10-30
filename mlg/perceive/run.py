@@ -194,7 +194,7 @@ def main() -> None:
     ap.add_argument("--force", action="store_true", help="ask Muse again")
     ap.add_argument("--redo", action="store_true", help="re-run critic + graph write from saved replies")
     a = ap.parse_args()
-    rosters = {ds: roster(ds) for ds in ("demo", "real")}
+    rosters = {ds: roster(ds) for ds in ("demo", "real")}  # demo = the old fictional test family, removed 2026-10-27
     items = pending(a.kind, a.limit)
     print(f"{len(items)} items, known people: " + ", ".join(f"{k} {len(v)}" for k, v in rosters.items()), flush=True)
     done = failed = 0

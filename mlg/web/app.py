@@ -57,9 +57,169 @@ def _crop_for(oid: str):
     return person_crop(o["path"], o["kind"], o["bbox"], o["frame"])
 
 
+APP = STATIC / "app"
+
+
 @app.get("/")
 def index():
-    return FileResponse(STATIC / "who.html")
+    return FileResponse(APP / "index.html", headers={"Cache-Control": "no-cache"})
+
+
+@app.get("/app/{name}")
+def app_file(name: str):
+    f = (APP / name).resolve()
+    if f.parent != APP.resolve() or not f.exists():
+        raise HTTPException(404)
+    return FileResponse(f, headers={"Cache-Control": "no-cache"})
+
+
+@app.get("/studio")
+def studio_redirect():
+    from fastapi.responses import RedirectResponse
+    return RedirectResponse("/#/films")
+
+
+# ---------------- library: the screens ----------------
+
+from mlg import imports, library, search  # noqa: E402
+
+
+def _or404(x):
+    if x is None:
+        raise HTTPException(404)
+    return x
+
+
+@app.get("/api/overview")
+def api_overview():
+    return library.overview()
+
+
+@app.get("/api/memories")
+def api_memories():
+    return library.memories()
+
+
+@app.get("/api/memory/{key:path}")
+def api_memory(key: str):
+    return _or404(library.memory(key))
+
+
+@app.get("/api/timeline")
+def api_timeline():
+    return library.timeline()
+
+
+@app.get("/api/year/{y}")
+def api_year(y: str):
+    return library.year(y)
+
+
+@app.get("/api/persons")
+def api_persons():
+    return library.people_list()
+
+
+@app.get("/api/person/{pid}")
+def api_person(pid: str):
+    return _or404(library.person(pid))
+
+
+@app.get("/api/graph")
+def api_graph():
+    return library.graph()
+
+
+@app.get("/api/shared")
+def api_shared(a: str, b: str):
+    return library.shared(a, b)
+
+
+@app.get("/api/moment/{mid}")
+def api_moment(mid: str):
+    return _or404(library.moment(mid))
+
+
+@app.get("/api/media/{sha}")
+def api_media(sha: str):
+    """The original file, for full-size viewing and video playback."""
+    with session() as s:
+        r = s.run("MATCH (mi:MediaItem {id: $id}) RETURN mi.path AS path, mi.kind AS kind", id=sha).single()
+    if not r or not Path(r["path"]).exists():
+        raise HTTPException(404)
+    if r["kind"] == "photo" and Path(r["path"]).suffix.lower() not in (".jpg", ".jpeg", ".png", ".webp", ".gif"):
+        return api_photo(sha)   # HEIC and friends: the browser gets the JPEG preview
+    return FileResponse(r["path"])
+
+
+@app.get("/api/search")
+def api_search(q: str):
+    if not q.strip():
+        raise HTTPException(400, "empty search")
+    return search.search(q.strip())
+
+
+@app.get("/api/ask")
+def api_ask(q: str):
+    if not q.strip():
+        raise HTTPException(400, "empty question")
+    return search.ask(q.strip())
+
+
+@app.post("/api/titles")
+def api_titles():
+    def run():
+        try:
+            library.write_titles()
+        except Exception:  # noqa: BLE001 - titles are a nicety; the cards fall back to Muse's event names
+            pass
+    threading.Thread(target=run, daemon=True).start()
+    return {"ok": True}
+
+
+# ---------------- import ----------------
+
+class FolderImport(BaseModel):
+    path: str | None = None      # None = open the folder picker on this computer
+
+
+class MetaImport(BaseModel):
+    paths: list[str] | None = None
+
+
+@app.get("/api/import")
+def api_import_status():
+    return {**imports.status(), "waiting": imports.estimate()}
+
+
+@app.post("/api/import/folder")
+def api_import_folder(r: FolderImport):
+    path = r.path or next(iter(imports.pick("folder")), None)
+    if not path:
+        return {"cancelled": True}
+    try:
+        return imports.start_folder(path)
+    except (ValueError, RuntimeError) as e:
+        raise HTTPException(400, str(e))
+
+
+@app.post("/api/import/meta")
+def api_import_meta(r: MetaImport):
+    paths = r.paths or imports.pick("zip")
+    if not paths:
+        return {"cancelled": True}
+    try:
+        return imports.start_meta(paths)
+    except (ValueError, RuntimeError) as e:
+        raise HTTPException(400, str(e))
+
+
+@app.post("/api/import/look")
+def api_import_look(limit: int | None = None):
+    try:
+        return imports.start_looking(limit)
+    except RuntimeError as e:
+        raise HTTPException(400, str(e))
 
 
 @app.get("/api/people")
@@ -168,6 +328,7 @@ def api_answer(a: Answer):
         identity.record(a.obs_id, a.action, pid)
     else:
         raise HTTPException(400, "unknown action")
+    library.invalidate()
     return {"ok": True, "person_id": pid}
 
 
@@ -184,6 +345,7 @@ def api_undo(u: Undo):
         s.run("""MATCH (o:Observation {id: $oid}) SET o.user_action = null
                  WITH o OPTIONAL MATCH (:Person)-[r:OBSERVED_AS {confirmed_by: 'user'}]->(o) DELETE r""",
               oid=u.obs_id).consume()
+    library.invalidate()
     return {"ok": True}
 
 
@@ -244,7 +406,7 @@ from mlg.shema import blessings  # noqa: E402
 
 class BlessingRequest(BaseModel):
     person_id: str
-    dataset: str = "demo"
+    dataset: str = "real"
     message: str = ""
 
 
@@ -330,14 +492,9 @@ from mlg.studio.make import FILMS, make  # noqa: E402
 FILM_THREADS: dict[str, threading.Thread] = {}
 
 
-@app.get("/studio")
-def studio_page():
-    return FileResponse(STATIC / "studio.html")
-
-
 class FilmRequest(BaseModel):
     request: str
-    dataset: str = "demo"
+    dataset: str = "real"
     template: str | None = None      # None = the producer picks from the request
     ask: bool = True                 # pause and ask the owner before cutting
 
@@ -413,7 +570,9 @@ def api_films():
         except HTTPException:
             continue
         v = st.get("versions", {})
+        first = next((m for sc in st.get("scenes") or [] for m in sc.get("moments") or []), None)
         out.append({"id": st["id"], "title": st.get("title") or st["request"][:60], "status": st["status"],
+                    "cover": first.split(":")[0] if first else None,
                     "request": st["request"], "v1": v.get("v1", {}).get("score"), "v2": v.get("v2", {}).get("score")})
     return out
 
