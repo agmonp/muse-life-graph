@@ -852,7 +852,9 @@ function questionsHtml(st) {
   const qs = st.questions || []; if (!qs.length) return '';
   const waiting = st.status === 'waiting';
   const left = waiting && st.waiting_until ? Math.max(0, Math.round((st.waiting_until - Date.now() / 1000) / 60)) : 0;
-  return `<div class="card pad ${waiting ? 'ask' : ''}"><div class="eyebrow">${waiting ? `The crew is waiting for you · ${left} min` : 'What the crew asked'}</div>
+  const gone = !waiting && qs.some(q => q.answer == null) && ['failed', 'interrupted'].includes(st.status);
+  return `<div class="card pad ${waiting ? 'ask' : ''}"><div class="eyebrow">${waiting ? `The crew is waiting for you · ${left} min`
+      : gone ? 'These questions closed when the film stopped' : 'What the crew asked'}</div>
     <h2 style="margin:4px 0 6px">${waiting ? 'A few things only you know' : 'Your answers'}</h2>
     ${qs.map(q => `<div class="q"><h3 dir="auto">${esc(q.text)}</h3><div class="small muted" dir="auto">${esc(q.why)}</div>
       ${q.kind === 'identity' ? `<div class="pics"><img src="${esc(q.image)}" alt="face"><img src="${esc(q.context_image)}" alt="whole picture"></div>` : ''}
@@ -888,7 +890,10 @@ function versionHtml(st, v) {
 function renderFilm(st) {
   const box = $('#filmbox'); if (!box) return;
   const head = `<div class="phead" style="margin-bottom:18px"><div><div class="eyebrow">${{running: 'Being made', waiting: 'Waiting for you', done: 'Ready', failed: 'Failed', interrupted: 'Stopped'}[st.status] || esc(st.status)}</div>
-    <h1 dir="auto">${esc(st.title || 'Planning…')}</h1><p dir="auto">“${esc(st.request)}”</p>${st.error ? `<p style="color:#c92a2a">${esc(st.error)}</p>` : ''}</div></div>`;
+    <h1 dir="auto">${esc(st.title || 'Planning…')}</h1><p dir="auto">“${esc(st.request)}”</p>${st.error ? `<p style="color:#c92a2a">${esc(st.error)}</p>` : ''}
+    ${['failed', 'interrupted'].includes(st.status) ? `<p class="small muted">${st.status === 'interrupted'
+      ? 'The server restarted while this film was being made.' : 'Something went wrong while making this film.'}</p>
+      <button class="btn primary" data-again="${esc(st.id)}">${ic('film')}Make it again</button>` : ''}</div></div>`;
   const vkey = JSON.stringify(Object.entries(st.versions || {}).map(([k, v]) => [k, v.score ?? v.duration]));
   if (filmRendered.vkey !== vkey || !$('#fversions')) {
     box.innerHTML = `<div id="fhead">${head}</div><div id="fask"></div><div class="versions" id="fversions">${versionHtml(st, 'v1')}${versionHtml(st, 'v2')}</div>
@@ -903,6 +908,13 @@ function renderFilm(st) {
   if (st.status === 'waiting' && !filmRendered.askShown) { filmRendered.askShown = true; $('#fask').scrollIntoView({block: 'start', behavior: 'smooth'}); }
   const c = $('.crew'); if (c) c.scrollTop = c.scrollHeight;
   box.onclick = async e => {
+    const ag = e.target.closest('[data-again]');
+    if (ag) {
+      ag.disabled = true;
+      try { const {id} = await api(`/api/films/${enc(ag.dataset.again)}/again`, {}); location.hash = `#/film/${id}`; }
+      catch (err) { ag.disabled = false; toast(err.message); }
+      return;
+    }
     const qb = e.target.closest('button[data-q]');
     if (qb) {
       filmPicked[qb.dataset.q] = qb.dataset.v; filmRendered.qkey = null;

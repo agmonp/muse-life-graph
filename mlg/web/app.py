@@ -167,6 +167,9 @@ def warm_up():
             library.memories()
             network.build()
             network.insights()
+            resumed = resume_films()
+            if resumed:
+                print("films picked up again:", resumed)
             from mlg import faces
             faces.refresh()
         except Exception as e:  # noqa: BLE001 - the first visitor then computes it instead
@@ -728,6 +731,46 @@ def _state(film_id: str) -> dict:
     if st.get("status") in ("running", "waiting") and film_id not in FILM_THREADS:
         st["status"] = "interrupted"   # the server restarted while this film was being made
     return st
+
+
+def _start_film(film_id: str, request: str, dataset: str, template: str | None, ask_wait: float) -> None:
+    def run():
+        try:
+            make(request, dataset, film_id, template=template or None, ask_wait=ask_wait)
+        except Exception:  # noqa: BLE001 - the error is in state.json for the page
+            pass
+    th = threading.Thread(target=run, daemon=True)
+    FILM_THREADS[film_id] = th
+    th.start()
+
+
+def resume_films(max_age_h: float = 6) -> list[str]:
+    """Films that were being made when the server stopped (a deploy, a restart) continue on their own."""
+    import json
+    out = []
+    for d in FILMS.glob("film_*"):
+        try:
+            st = json.loads((d / "state.json").read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            continue
+        if st.get("status") in ("running", "waiting") and d.name not in FILM_THREADS                 and time.time() - st.get("created", 0) < max_age_h * 3600:
+            _start_film(d.name, st["request"], st.get("dataset", "real"), st.get("template"),
+                        st.get("ask_wait", ASK_WAIT))
+            out.append(d.name)
+    return out
+
+
+@app.post("/api/films/{film_id}/again")
+def api_film_again(film_id: str):
+    """The same request, as a new film (for one that failed or was stopped)."""
+    st = _state(film_id)
+    new_id = time.strftime("film_%Y%m%d_%H%M%S")
+    _start_film(new_id, st["request"], st.get("dataset", "real"), st.get("template"), st.get("ask_wait", ASK_WAIT))
+    for _ in range(50):
+        if (FILMS / new_id / "state.json").exists():
+            break
+        time.sleep(0.1)
+    return {"id": new_id}
 
 
 class Answers(BaseModel):

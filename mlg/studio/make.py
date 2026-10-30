@@ -114,11 +114,15 @@ def make(request: str, dataset: str = "real", film_id: str | None = None,
          ask_wait: float = 0) -> dict:
     """ask_wait: seconds the crew waits for the owner's answers (0 = don't ask, use the crew's picks)."""
     film_id = film_id or time.strftime("film_%Y%m%d_%H%M%S")
+    resumed = (FILMS / film_id / "state.json").exists()   # picked up again after a server restart
     job = Job(film_id, request, dataset)
-    job.state["timing"] = {}
+    job.state.update(timing={}, template=template, ask_wait=ask_wait)
     if on_start:
         on_start(film_id)
     try:
+        if resumed:
+            job.say("Director", "picked up again after the server restarted",
+                    "steps already done come back from the cache; answers you gave are kept")
         job.say("Producer", "reading the request", request)
         sb = plan(request, dataset, template)
         for entry in sb["crew_log"]:
