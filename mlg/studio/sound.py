@@ -49,13 +49,28 @@ SYSTEM = (
     "nothing that would fight a spoken voice line.")
 
 
+REMOTE = os.environ.get("MLG_GPU") == "modal"   # the hosted site: Meta's audio models on a Modal GPU
+
+
 def _gpu_ready() -> bool:
-    return GPU_PY.exists()
+    return REMOTE or GPU_PY.exists()
+
+
+def _run_remote(todo: list[dict]) -> None:
+    import modal
+    fn = modal.Function.from_name(os.environ.get("MLG_MODAL_APP", "muse-life-graph"), "gpu_jobs")
+    for job, res in zip(todo, fn.remote([{**j, "out": f"/tmp/{i}.wav"} for i, j in enumerate(todo)])):
+        if not res.get("ok"):
+            raise RuntimeError(f"GPU worker: {res.get('error')}")
+        Path(job["out"]).parent.mkdir(parents=True, exist_ok=True)
+        Path(job["out"]).write_bytes(res["wav"])
 
 
 def _run(jobs: list[dict]) -> list[dict]:
     todo = [j for j in jobs if not Path(j["out"]).exists()]
-    if todo:
+    if todo and REMOTE:
+        _run_remote(todo)
+    elif todo:
         OUT.mkdir(parents=True, exist_ok=True)
         spec = OUT / f"jobs_{hashlib.sha1(json.dumps(todo).encode()).hexdigest()[:10]}.json"
         spec.write_text(json.dumps(todo), encoding="utf-8")

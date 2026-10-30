@@ -12,6 +12,7 @@ import argparse
 import re
 from pathlib import Path
 
+from mlg import site
 from mlg.config import DATA
 from mlg.graph.db import session
 from mlg.muse.media import open_image
@@ -103,7 +104,7 @@ def roster(dataset: str | None = None) -> list[dict]:
         out = []
         for r in rows:
             d = dict(r)
-            d["crops"] = [c for c in [d["crop"], *d.pop("more")] if c and Path(c).exists()]
+            d["crops"] = [c for c in (site.local(x) for x in [d["crop"], *d.pop("more")]) if c and Path(c).exists()]
             out.append(d)
         return out
 

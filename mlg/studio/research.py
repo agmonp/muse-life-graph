@@ -7,6 +7,7 @@ the screenwriter may only build scenes from these moment ids.
 """
 from __future__ import annotations
 
+from mlg import site
 from mlg.graph.db import session
 from mlg.people import dataset_of
 
@@ -42,6 +43,7 @@ def moments(dataset: str = "real", person_ids: list[str] | None = None) -> list[
     for r in rows:
         if dataset_of(r["path"]) != dataset:
             continue
+        r["path"] = site.local(r["path"])
         r["faces"] = [f for f in r["faces"] if f.get("id")]
         r["unknown"] = [f for f in r["unknown"] if f.get("obs")]
         r["people"] = sorted({f["name"] for f in r["faces"]})

@@ -9,7 +9,7 @@ from pathlib import Path
 from dotenv import load_dotenv
 
 ROOT = Path(__file__).resolve().parent.parent
-DATA = ROOT / "data"
+DATA = Path(os.environ.get("MLG_DATA") or ROOT / "data")   # the hosted site keeps its data on a volume
 CACHE = DATA / "cache"
 
 

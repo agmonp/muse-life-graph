@@ -14,6 +14,7 @@ import time
 from collections import Counter, defaultdict
 from datetime import date
 
+from mlg import site
 from mlg.config import CACHE
 from mlg.graph.db import session
 from mlg.ingest.scan import connect
@@ -77,6 +78,7 @@ def _load() -> tuple[list[dict], dict]:
         r["said"] = [u for u in r["said"] if u.get("id") and u.get("text")]
         r["people"] = sorted({f["id"] for f in r["faces"]})
         r["album"] = albums.get(r["path"])
+        r["path"] = site.local(r["path"])
         r["date"] = r["date"] or ""
         out.append(r)
     out.sort(key=lambda m: m["date"])

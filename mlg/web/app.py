@@ -18,7 +18,7 @@ from fastapi import FastAPI, HTTPException
 from fastapi.responses import FileResponse, Response
 from pydantic import BaseModel
 
-from mlg import identity, people
+from mlg import identity, people, site
 from mlg.config import CACHE
 from mlg.graph.db import session
 from mlg.ingest.scan import connect
@@ -49,7 +49,7 @@ def _obs(oid: str) -> dict:
                   id=oid).single()
     if not r:
         raise HTTPException(404, "observation not found")
-    return dict(r)
+    return {**dict(r), "path": site.local(r["path"])}
 
 
 def _crop_for(oid: str):
@@ -58,6 +58,49 @@ def _crop_for(oid: str):
 
 
 APP = STATIC / "app"
+
+# ---------------- the hosted site: an access code, and nobody changes who is who ----------------
+
+from fastapi import Request  # noqa: E402
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse  # noqa: E402
+
+READ_ONLY = ("/api/answer", "/api/answer_group", "/api/undo", "/api/recheck", "/api/import", "/api/titles")
+OPEN = ("/bless/", "/api/bless/", "/app/logo.svg", "/enter")
+CODE_PAGE = """<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Muse Life Graph</title><link rel="icon" href="/app/logo.svg">
+<body style="margin:0;min-height:100vh;display:grid;place-items:center;background:#f6f1ea;font:16px system-ui;color:#1e1916">
+<form method="post" action="/enter" style="background:#fffdfa;padding:32px;border-radius:20px;box-shadow:0 8px 30px #0001;width:min(360px,90vw)">
+<img src="/app/logo.svg" width="44" alt=""><h1 style="font:600 26px Georgia,serif;margin:14px 0 6px">Muse Life Graph</h1>
+<p style="color:#5f564f;margin:0 0 18px">A private demo of one family's life graph. Enter the access code from the submission.</p>
+<input name="code" type="password" autofocus placeholder="Access code" style="width:100%;box-sizing:border-box;padding:12px 14px;border:1px solid #d8ccbf;border-radius:12px;font:inherit">
+<button style="margin-top:12px;width:100%;padding:12px;border:0;border-radius:999px;background:#d9542a;color:#fff;font:600 16px system-ui">Enter</button>
+{msg}</form></body></html>"""
+
+
+@app.middleware("http")
+async def site_guard(request: Request, call_next):
+    path = request.url.path
+    if site.enabled():
+        if site.CODE and request.cookies.get("mlg_code") != site.CODE and not path.startswith(OPEN):
+            if path.startswith("/api/"):
+                return JSONResponse({"detail": "access code needed"}, status_code=401)
+            return HTMLResponse(CODE_PAGE.replace("{msg}", ""))
+        if request.method == "POST" and path.startswith(READ_ONLY):
+            return JSONResponse({"detail": "This is a demo of someone's real family: names can't be changed here. "
+                                           "Run Muse Life Graph on your own photos to name your people."},
+                                status_code=403)
+    return await call_next(request)
+
+
+@app.post("/enter")
+async def enter(request: Request):
+    form = await request.form()
+    import hmac
+    if site.CODE and hmac.compare_digest(str(form.get("code") or ""), site.CODE):
+        r = RedirectResponse("/", status_code=303)
+        r.set_cookie("mlg_code", site.CODE, max_age=60 * 60 * 24 * 30, httponly=True, samesite="lax", secure=True)
+        return r
+    return HTMLResponse(CODE_PAGE.replace("{msg}", '<p style="color:#c92a2a">That code is not right.</p>'), status_code=401)
 
 
 @app.get("/")
@@ -145,6 +188,8 @@ def api_media(sha: str):
     """The original file, for full-size viewing and video playback."""
     with session() as s:
         r = s.run("MATCH (mi:MediaItem {id: $id}) RETURN mi.path AS path, mi.kind AS kind", id=sha).single()
+    if r:
+        r = {**dict(r), "path": site.local(r["path"])}
     if not r or not Path(r["path"]).exists():
         raise HTTPException(404)
     if r["kind"] == "photo" and Path(r["path"]).suffix.lower() not in (".jpg", ".jpeg", ".png", ".webp", ".gif"):
@@ -256,6 +301,7 @@ def api_photo(sha: str):
             r = s.run("MATCH (mi:MediaItem {id: $id}) RETURN mi.path AS path, mi.kind AS kind", id=sha).single()
         if not r:
             raise HTTPException(404)
+        r = {**dict(r), "path": site.local(r["path"])}
         if r["kind"] == "audio":   # a voice recording (a blessing) has no picture: show a voice tile
             return Response(VOICE_TILE, media_type="image/svg+xml", headers={"Cache-Control": "max-age=86400"})
         if r["kind"] == "video":
