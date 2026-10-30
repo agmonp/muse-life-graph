@@ -167,6 +167,7 @@ def warm_up():
             library.memories()
             network.build()
             network.insights()
+            network.by_year()
             resumed = resume_films()
             if resumed:
                 print("films picked up again:", resumed)
@@ -242,6 +243,12 @@ def api_person(pid: str):
 def api_graph():
     from mlg import network
     return network.build()
+
+
+@app.get("/api/graph/years")
+def api_graph_years():
+    from mlg import network
+    return network.by_year()
 
 
 @app.get("/api/ties/{pid}")
@@ -806,6 +813,35 @@ def api_films():
                     "cover": first.split(":")[0] if first else None,
                     "request": st["request"], "v1": v.get("v1", {}).get("score"), "v2": v.get("v2", {}).get("score")})
     return out
+
+
+@app.get("/api/featured")
+def api_featured():
+    """The film the home page opens with: the best finished one (critic's v2 score, then the newest)."""
+    import json
+    best = None
+    for d in FILMS.glob("film_*"):
+        try:
+            st = json.loads((d / "state.json").read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            continue
+        v2 = (st.get("versions") or {}).get("v2") or {}
+        if st.get("status") != "done" or not (d / "v2" / "film.mp4").exists():
+            continue
+        key = (v2.get("score") or 0, st.get("created", 0))
+        if best is None or key > best[0]:
+            best = (key, st)
+    if not best:
+        return {"film": None}
+    st = best[1]
+    vs = {k: {x: v.get(x) for x in ("score", "duration", "summary", "notes")} for k, v in st["versions"].items()}
+    crew = list(dict.fromkeys(e["who"] for e in st["log"] if e["who"] not in ("Script check",)))
+    first = next((m for sc in st.get("scenes") or [] for m in sc.get("moments") or []), None)
+    return {"film": {"id": st["id"], "title": st.get("title"), "request": st["request"], "versions": vs,
+                     "applied": st.get("applied") or [], "crew": crew, "scenes": len(st.get("scenes") or []),
+                     "made_in": round(st["log"][-1]["t"]) if st.get("log") else None,
+                     "asked": sum(1 for q in st.get("questions") or [] if q.get("answer") not in (None, "__crew__")),
+                     "cover": first.split(":")[0] if first else None}}
 
 
 @app.get("/api/films/{film_id}")

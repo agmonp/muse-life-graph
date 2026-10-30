@@ -321,46 +321,95 @@ function greeting() {
 }
 async function home() {
   const o = OV;
-  const hero = o.on_this_day[0] || o.recent.find(x => x.people.length) || o.recent[0];
-  const heroLabel = o.on_this_day[0] ? `On this day · ${hero.years_ago} year${hero.years_ago > 1 ? 's' : ''} ago` : 'A memory';
-  const asks = [`When was I happiest?`, `Photos of me as a child`, o.recent[1] ? `Tell me about ${o.recent[1].title}` : 'Who do I spend the most time with?'];
-  // the face groups are computed ahead; their first faces make the stack
-  const fg = await api('/api/face_groups?limit=5&per=1').catch(() => ({groups: [], open: 0}));
-  const faces = {total: fg.open || 0, faces: fg.groups.map(g => ({id: g.faces[0].id}))};
-  return `<div class="hello">
+  const [feat, fg] = await Promise.all([api('/api/featured').catch(() => ({film: null})),
+                                        api('/api/face_groups?limit=5&per=1').catch(() => ({groups: [], open: 0}))]);
+  const f = feat.film;
+  const mm = s => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`;
+  const crewLine = f ? f.crew.filter(w => w !== 'Director').map(w => `<span class="crewchip" style="--c:${CREW_COLORS[w] || '#8f857c'}">${esc(w)}</span>`)
+    .join(`<span class="arrow">${ic('arrow')}</span>`) : '';
+  const v1 = f?.versions.v1 || {}, v2 = f?.versions.v2 || {};
+  const screening = f ? `<section class="screening fade-in">
+      <div class="screen">
+        <video id="fv" controls playsinline preload="metadata" poster="${f.cover ? photo(f.cover) : ''}" src="/api/films/${enc(f.id)}/video/v2"></video>
+        <div class="vtabs" role="tablist">
+          <button class="on" data-v="v2" role="tab">After the critic${v2.score != null ? ` · ${v2.score}/10` : ''}</button>
+          <button data-v="v1" role="tab">First cut${v1.score != null ? ` · ${v1.score}/10` : ''}</button></div>
+      </div>
+      <div class="story">
+        <div class="eyebrow">Made by Muse from one sentence</div>
+        <h1 dir="auto">${esc(f.title || 'A film')}</h1>
+        <blockquote dir="auto">“${esc(f.request)}”</blockquote>
+        <div class="crewline">${crewLine}</div>
+        <div class="filmstats">
+          <div><b>${f.scenes}</b><span>scenes</span></div>
+          <div><b>${f.made_in ? Math.round(f.made_in / 60) : '–'}</b><span>minutes</span></div>
+          <div><b>${f.asked}</b><span>asked you</span></div>
+          <div><b>${(v1.notes || []).length}</b><span>critic notes</span></div></div>
+        <p class="small">The crew read ${o.photos.toLocaleString()} photos and ${o.videos} videos, wrote the story, checked every picture,
+          cut a first version, then <b>watched it</b> — and re-cut it from the critic's notes. It stopped to ask about faces only you know.</p>
+        <div class="chips"><a class="btn primary" href="#/films">${ic('film')}Make your own film</a>
+          <a class="btn ghost" href="#/film/${enc(f.id)}">See how it was made</a></div>
+      </div>
+        <div class="critic" id="fcritic">
+          <div class="eyebrow">What the critic saw in the first cut</div>
+          <div class="hint">Muse Wonder watched the draft and wrote these notes; the editor applied them. Tap one to see that moment.</div>
+          <div class="strip">${(v1.notes || []).map((n, i) => `<button class="mark" style="left:${Math.min(98, 100 * n.t / (v1.duration || 60)).toFixed(1)}%" data-t="${n.t}" title="${esc(n.problem)}">${i + 1}</button>`).join('')}</div>
+          <div class="notelist">${(v1.notes || []).slice(0, 4).map((n, i) => `<button class="noterow" data-t="${n.t}"><b>${i + 1}</b><span><span class="tiny faint">${mm(n.t)} · ${esc(n.op)}</span><br>${esc(n.problem)}</span></button>`).join('')}</div>
+        </div>
+      </section>` : '';
+  const hello = `<div class="${f ? 'hello2' : 'hello'}">
       <div class="intro">
         <div class="eyebrow">${greeting()}${o.owner ? `, ${esc(o.owner)}` : ''}</div>
-        <h1>Here is your life,<br>as Muse sees it.</h1>
-        <div class="stats"><span><b>${o.photos}</b> photos</span><span><b>${o.videos}</b> videos</span><span><b>${o.people}</b> people</span>
+        ${f ? '<h2>Tell the crew what to make</h2>' : '<h1>Here is your life,<br>as Muse sees it.</h1>'}
+        <div class="stats"><span><b>${o.photos.toLocaleString()}</b> photos</span><span><b>${o.videos}</b> videos</span><span><b>${o.people}</b> people</span>
           <span><b>${o.memories}</b> memories</span>${o.years ? `<span><b>${o.years[0]}–${o.years[1]}</b></span>` : ''}</div>
-        <form class="askbox" id="askform"><input id="askq" dir="auto" placeholder="Ask anything — “when did we go to the sea?”" aria-label="Ask about your life">
-          <button class="btn primary">${ic('sparkle')}Ask</button></form>
-        <div class="suggest">${asks.map(a => `<button class="chip" data-ask="${esc(a)}">${esc(a)}</button>`).join('')}</div>
-      </div>
-      ${hero ? `<a class="hero" href="#/memory/${enc(hero.id)}"><img src="${photo(hero.cover)}" alt="">
-        <div class="cap"><div class="eyebrow">${esc(heroLabel)}</div><h3 dir="auto">${esc(hero.title)}</h3>
-        <div class="small">${esc(memWhen(hero))}${hero.people.length ? ' · ' + hero.people.map(p => esc(p.name)).join(', ') : ''}</div></div></a>` : ''}
-    </div>
-    ${faces.total ? `<div class="section card needs">
-      <div class="facestack">${faces.faces.slice(0, 5).map(f => `<img src="/api/crop/${enc(f.id)}" alt="" loading="lazy">`).join('')}</div>
-      <div><h3>${faces.total.toLocaleString()} faces Muse couldn't name yet</h3><div class="small muted">${OV.site
-        ? 'Faces that look alike are grouped, so one answer names many. (On this demo, answers are kept for your visit only.)'
-        : 'Faces that look alike are grouped, so one answer names many — and Muse learns to recognise them next time.'}</div></div>
-      <a class="btn primary" href="#/faces">Who is this? ${ic('arrow')}</a></div>` : ''}
-    <div class="section"><div class="section-head"><div><h2>Recent memories</h2><p class="muted small">Moments that belong together, titled by Muse</p></div>
-      <a class="btn ghost sm" href="#/memories">All memories ${ic('arrow')}</a></div>
-      <div class="row-scroll">${o.recent.map(memCard).join('')}</div></div>
-    <div class="section"><div class="section-head"><div><h2>Make a film</h2><p class="muted small">One sentence. A crew of Muse agents writes, cuts, watches and re-cuts it.</p></div></div>
-      <div class="ideas">
-        <button class="idea" data-film="birthday">${ic('cake')}<b>A birthday film</b><span class="small muted">For someone you love — with blessings from family and friends.</span></button>
-        <button class="idea" data-film="together">${ic('together')}<b>The two of us</b><span class="small muted">Every moment two people shared, from the first photo to now.</span></button>
-        <button class="idea" data-film="year">${ic('calendar')}<b>A year in a minute</b><span class="small muted">One year of your life, in the order it happened.</span></button>
+        <form class="askbox" id="makeform"><input id="makeq" dir="auto" placeholder="A one-minute film for grandma's 80th, warm and a little funny" aria-label="Describe a film">
+          <button class="btn primary">${ic('film')}Make it</button></form>
+        <div class="suggest">
+          <button class="chip" data-film="birthday">${ic('cake')}A birthday film</button>
+          <button class="chip" data-film="together">${ic('together')}The two of us</button>
+          <button class="chip" data-film="year">${ic('calendar')}A year in a minute</button></div>
       </div></div>`;
+  const faces = fg.open ? `<div class="card needs">
+      <div class="facestack">${fg.groups.slice(0, 5).map(g => `<img src="/api/crop/${enc(g.faces[0].id)}" alt="" loading="lazy">`).join('')}</div>
+      <div><h3>${fg.open.toLocaleString()} faces Muse couldn't name yet</h3><div class="small muted">Faces that look alike are grouped, so one answer names many${OV.site ? ' (on this demo, answers are kept for your visit only)' : ''}.</div></div>
+      <a class="btn" href="#/faces">Who is this? ${ic('arrow')}</a></div>` : '';
+  const circles = `<a class="card circlescard" href="#/connections">
+      <div><div class="eyebrow">The circles of your life</div><h3>${o.people} people in their circles, from ${o.years ? o.years[0] : ''} to today</h3>
+      <div class="small muted">Watch the circles form, grow and fade — year by year. Who bridges them, who is new, who you haven't seen in years.</div></div>
+      <span class="btn primary">${ic('play')}Watch them grow</span></a>`;
+  const asks = [`When was I happiest?`, `Photos of me as a child`, `Who do I spend the most time with?`];
+  return `${screening}${hello}
+    <div class="section duo">${circles}${faces}</div>
+    <div class="section"><div class="section-head"><div><h2>${o.on_this_day.length ? 'On this day' : 'Recent memories'}</h2><p class="muted small">Moments that belong together, titled by Muse</p></div>
+      <a class="btn ghost sm" href="#/memories">All memories ${ic('arrow')}</a></div>
+      <div class="row-scroll">${(o.on_this_day.length ? o.on_this_day : o.recent).map(memCard).join('')}</div></div>
+    <div class="section"><div class="section-head"><div><h2>Or ask your life</h2><p class="muted small">Answers come with the pictures they are based on.</p></div></div>
+      <div class="suggest">${asks.map(a => `<button class="chip" data-ask="${esc(a)}">${esc(a)}</button>`).join('')}</div></div>`;
 }
 afterRender[''] = () => {
-  $('#askform').onsubmit = e => { e.preventDefault(); const q = $('#askq').value.trim(); if (q) location.hash = `#/search?q=${enc(q)}`; };
   $$('[data-ask]').forEach(b => b.onclick = () => { location.hash = `#/search?q=${enc(b.dataset.ask)}`; });
   $$('[data-film]').forEach(b => b.onclick = () => { location.hash = `#/films?idea=${b.dataset.film}`; });
+  $('#makeform').onsubmit = async e => {
+    e.preventDefault();
+    const request = $('#makeq').value.trim();
+    if (!request) return $('#makeq').focus();
+    try { const {id} = await api('/api/films', {request, ask: true}); location.hash = `#/film/${id}`; }
+    catch (err) { toast(err.message); }
+  };
+  const v = $('#fv');
+  if (!v) return;
+  const id = v.src.split('/video/')[0];
+  $$('.vtabs button').forEach(b => b.onclick = () => {
+    $$('.vtabs button').forEach(x => x.classList.toggle('on', x === b));
+    v.src = `${id}/video/${b.dataset.v}`; v.play().catch(() => {});
+  });
+  $('#fcritic').onclick = e => {
+    const m = e.target.closest('[data-t]'); if (!m) return;
+    if (!v.src.endsWith('/v1')) { $$('.vtabs button')[1].click(); }
+    const go = () => { v.currentTime = Math.max(0, +m.dataset.t - .5); v.play().catch(() => {}); };
+    v.readyState >= 1 ? go() : v.addEventListener('loadedmetadata', go, {once: true});
+  };
 };
 
 /* ---------------- memories ---------------- */
@@ -470,7 +519,13 @@ async function connections() {
         <button class="iconbtn" data-z="out" aria-label="Zoom out"><svg class="icon"><path d="M5 12h14"/></svg></button>
         <button class="iconbtn" data-z="fit" aria-label="Fit">${ic('graph')}</button>
         <label class="toggle small"><input type="checkbox" id="gme">My ties</label></div>
-      <div class="glegend" id="glegend"></div></div>
+      <div class="glegend" id="glegend"></div>
+      <div class="timebar" id="timebar" hidden>
+        <button class="iconbtn" id="tplay" aria-label="Play the years">${ic('play')}</button>
+        <div class="tslide"><svg class="thist" id="thist" preserveAspectRatio="none"></svg>
+          <input type="range" id="tyear" min="0" max="1" value="1" aria-label="Year"></div>
+        <div class="tyear"><b id="tylabel">All years</b><span id="tycap" class="tiny faint"></span></div>
+        <button class="btn sm ghost" id="tall">All years</button></div></div>
       <aside class="card netside" id="netside"><div class="skeleton" style="height:240px"></div></aside></div>`;
 }
 function linkText(t) {
@@ -489,13 +544,13 @@ afterRender.connections = async (_, params) => {
   const X0 = Math.min(...ex.map(e => e[0])) - 30, Y0 = Math.min(...ex.map(e => e[1])) - 30;
   const X1 = Math.max(...ex.map(e => e[2])) + 30, Y1 = Math.max(...ex.map(e => e[3])) + 30;
   if (innerWidth < 980) {   // narrow screens: the box takes the map's own proportions, no empty bands
-    wrap.style.height = `${Math.round(Math.max(320, Math.min(innerHeight * .7, wrap.clientWidth * (Y1 - Y0) / (X1 - X0) + 96)))}px`;
+    wrap.style.height = `${Math.round(Math.max(320, Math.min(innerHeight * .7, wrap.clientWidth * (Y1 - Y0) / (X1 - X0) + 200)))}px`;   // + the zoom tools and the year bar
     wrap.style.minHeight = '0';
   }
   const W = wrap.clientWidth, H = wrap.clientHeight;
   let view;
-  const TOP = 58;   // screen pixels kept free for the zoom tools
-  const fit = () => { const k = Math.min(W / (X1 - X0), (H - TOP) / (Y1 - Y0)); view = {k, x: W / 2 - k * (X0 + X1) / 2, y: TOP + (H - TOP) / 2 - k * (Y0 + Y1) / 2}; };
+  const TOP = 58, BOTTOM = 120;   // screen pixels kept free for the zoom tools and the year bar
+  const fit = () => { const k = Math.min(W / (X1 - X0), (H - TOP - BOTTOM) / (Y1 - Y0)); view = {k, x: W / 2 - k * (X0 + X1) / 2, y: TOP + (H - TOP - BOTTOM) / 2 - k * (Y0 + Y1) / 2}; };
   fit();
   const maxW = Math.max(...g.edges.filter(e => !e.owner).map(e => e.w), 0.01);
   const edge = (e, cls) => { const a = byId[e.a], b = byId[e.b]; if (!a || !b) return '';
@@ -604,7 +659,70 @@ afterRender.connections = async (_, params) => {
   $$('.gtools [data-z]').forEach(b => b.onclick = () => { if (b.dataset.z === 'fit') { fit(); apply(); } else zoomAt(W / 2, H / 2, b.dataset.z === 'in' ? 1.3 : 1 / 1.3); });
   const want = params.get('focus');
   if (want && byId[want]) { focus(want); zoomTo(byId[want].x, byId[want].y, 260); }
+  timeline(svg, g, byId);
 };
+
+// the circles through time: everyone stays where they are; each year lights up who was there and with whom
+async function timeline(svg, g, byId) {
+  const t = await api('/api/graph/years').catch(() => null);
+  if (!t || t.years.length < 2) return;
+  const bar = $('#timebar'), slider = $('#tyear');
+  bar.hidden = false;
+  slider.max = t.years.length;   // the last stop is "all years"
+  slider.value = t.years.length;
+  const maxP = Math.max(...t.photos);
+  $('#thist').setAttribute('viewBox', `0 0 ${t.years.length} 10`);
+  $('#thist').innerHTML = t.photos.map((n, i) => `<rect x="${i + .12}" width=".76" y="${10 - 10 * Math.sqrt(n / maxP)}" height="${10 * Math.sqrt(n / maxP)}"/>`).join('');
+  const first = {};
+  for (const [pid, ys] of Object.entries(t.people)) first[pid] = Object.keys(ys).sort()[0];
+  const tieYears = Object.fromEntries(t.ties.map(x => [[x.a, x.b].sort().join('|'), x.years]));
+  const nodes = $$('.gnode', svg), edges = $$('.gedge', svg), islands = $$('.island', svg);
+  const show = i => {
+    const y = t.years[i];
+    if (!y) {   // all years
+      nodes.forEach(n => { n.classList.remove('ghost', 'lit', 'fresh'); n.setAttribute('transform', `translate(${byId[n.dataset.id].x},${byId[n.dataset.id].y})`); });
+      edges.forEach(e => e.classList.remove('ghost', 'lit'));
+      islands.forEach(c => c.classList.remove('ghost'));
+      $('#tylabel').textContent = 'All years'; $('#tycap').textContent = `${g.stats.people} people`;
+      $('#thist').querySelectorAll('rect').forEach(r => r.classList.remove('on'));
+      return;
+    }
+    const counts = Object.fromEntries(Object.entries(t.people).map(([p, ys]) => [p, ys[y] || 0]));
+    const maxC = Math.max(1, ...Object.values(counts));
+    const lit = new Set(), circlesLit = new Set();
+    nodes.forEach(n => {
+      const id = n.dataset.id, c = counts[id] || 0, nd = byId[id];
+      const on = c > 0 || nd.owner;
+      n.classList.toggle('ghost', !on); n.classList.toggle('lit', on); n.classList.toggle('fresh', first[id] === y);
+      const k = on ? .75 + .55 * Math.sqrt(c / maxC) : .6;
+      n.setAttribute('transform', `translate(${nd.x},${nd.y}) scale(${k.toFixed(2)})`);
+      if (on) { lit.add(id); circlesLit.add(nd.circle); }
+    });
+    edges.forEach(e => { const n = (tieYears[[e.dataset.a, e.dataset.b].sort().join('|')] || {})[y] || 0;
+      e.classList.toggle('lit', n > 0); e.classList.toggle('ghost', !n); });
+    islands.forEach(c => c.classList.toggle('ghost', !circlesLit.has(c.dataset.circle)));
+    const fresh = Object.keys(first).filter(p => first[p] === y && byId[p]).map(p => byId[p].name);
+    $('#tylabel').textContent = y;
+    $('#tycap').textContent = `${lit.size} people · ${t.photos[i]} pictures${fresh.length ? ` · new: ${fresh.slice(0, 3).join(', ')}${fresh.length > 3 ? ` +${fresh.length - 3}` : ''}` : ''}`;
+    $('#thist').querySelectorAll('rect').forEach((r, j) => r.classList.toggle('on', j === i));
+  };
+  let timer = null;
+  const stop = () => { clearInterval(timer); timer = null; $('#tplay').innerHTML = ic('play'); };
+  slider.oninput = () => { stop(); show(+slider.value); };
+  $('#tall').onclick = () => { stop(); slider.value = t.years.length; show(t.years.length); };
+  $('#tplay').onclick = () => {
+    if (timer) return stop();
+    if (+slider.value >= t.years.length - 1) slider.value = 0;
+    $('#tplay').innerHTML = '<svg class="icon"><path d="M8 5v14M16 5v14"/></svg>';
+    show(+slider.value);
+    timer = setInterval(() => {
+      if (!document.body.contains(slider)) return stop();
+      if (+slider.value >= t.years.length - 1) { stop(); return; }
+      slider.value = +slider.value + 1; show(+slider.value);
+    }, 900);
+  };
+  show(t.years.length);
+}
 
 /* ---------------- search / ask ---------------- */
 function looksLikeQuestion(q) {

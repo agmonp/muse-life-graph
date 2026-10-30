@@ -326,3 +326,31 @@ def insights() -> dict:
     fading = [t for t in mine if t["pics"] + t["events"] >= 6 and t["to"] and int(t["to"]) <= last - 6][:6]
     rising = [t for t in mine if t["pics"] + t["events"] >= 4 and t["from"] and int(t["from"]) >= last - 4][:6]
     return {"closest": closest, "fading": fading, "rising": rising, "bridges": net["bridges"], "stats": net["stats"]}
+
+
+def by_year() -> dict:
+    """The network through time: per person and per drawn tie, how many pictures in each year.
+    The page keeps everyone where they are and lets the years light them up."""
+    net = build()
+    ms, _ = library.data()
+    shown = {n["id"] for n in net["nodes"]}
+    drawn = {tuple(sorted((e["a"], e["b"]))) for e in net["edges"]}
+    people: dict[str, Counter] = defaultdict(Counter)
+    ties: dict[tuple, Counter] = defaultdict(Counter)
+    photos = Counter()
+    for m in ms:
+        y = m["date"][:4]
+        if not y.isdigit():
+            continue
+        photos[y] += 1
+        ps = sorted(p for p in set(m["people"]) if p in shown)
+        for p in ps:
+            people[p][y] += 1
+        for i in range(len(ps)):
+            for j in range(i + 1, len(ps)):
+                if (ps[i], ps[j]) in drawn:
+                    ties[(ps[i], ps[j])][y] += 1
+    years = sorted(photos)
+    return {"years": years, "photos": [photos[y] for y in years],
+            "people": {p: dict(c) for p, c in people.items()},
+            "ties": [{"a": a, "b": b, "years": dict(c)} for (a, b), c in ties.items()]}
