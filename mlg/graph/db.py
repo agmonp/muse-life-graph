@@ -31,9 +31,14 @@ def driver() -> Driver:
         # against certifi's bundle instead of the "+s" scheme's system default.
         return GraphDatabase.driver(f"{scheme[:-2]}://{rest}", auth=(s.neo4j_user, s.neo4j_password),
                                     encrypted=True, trusted_certificates=TrustCustomCAs(certifi.where()),
-                                    notifications_min_severity="OFF")
+                                    notifications_min_severity="OFF", **KEEP_ALIVE)
     return GraphDatabase.driver(s.neo4j_uri, auth=(s.neo4j_user, s.neo4j_password),
-                                notifications_min_severity="OFF")
+                                notifications_min_severity="OFF", **KEEP_ALIVE)
+
+
+# AuraDB drops connections that sit idle (a film can take ten minutes between two writes): test a pooled
+# connection before use when it has idled, and never keep one long enough to go stale
+KEEP_ALIVE = {"liveness_check_timeout": 30, "max_connection_lifetime": 240}
 
 
 @contextmanager

@@ -188,8 +188,19 @@ def make(request: str, dataset: str = "real", film_id: str | None = None,
         job.put("critique_v2.json", c2)
         job.state["versions"]["v2"].update(score=c2["score"], summary=c2["summary"], notes=c2["notes"])
         job.say("Critic", f"v2 scored {c2['score']}/10 (v1 was {c1['score']})", c2["summary"])
+        try:
+            job.say("Critic", "blind test: watching both cuts without being told which is the re-cut")
+            b = critic.blind(job.dir / "v1" / "film.mp4", v2, film_id)
+            job.state["blind"] = b
+            job.say("Critic", {"v2": "blind test: preferred the re-cut", "v1": "blind test: preferred the first cut",
+                               "same": "blind test: no clear preference"}[b["winner"]], b["reason"])
+        except Exception as e:  # noqa: BLE001 - the comparison is a measure, not part of the film
+            job.say("Critic", "blind test skipped", str(e)[:200])
 
-        record(film_id, sb, edl2, v2, {"v1": c1["score"], "v2": c2["score"]})
+        try:   # the film is finished; its record in the graph is a nicety and must not fail it
+            record(film_id, sb, edl2, v2, {"v1": c1["score"], "v2": c2["score"]})
+        except Exception as e:  # noqa: BLE001
+            job.say("Director", "the film is done; saving it to the graph will be tried again later", str(e)[:200])
         job.state["status"] = "done"
         job.state["finished"] = time.time()
         job.save()

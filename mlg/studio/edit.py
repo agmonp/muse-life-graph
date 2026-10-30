@@ -14,6 +14,7 @@ END_S = 3.5
 MIN_STILL = 2.6
 MAX_STILL = 8.0
 MAX_CLIP = 15.0
+MAX_SILENT_CLIP = 8.0   # a clip nobody speaks in carries a scene for a breath, not a quarter of the film
 VOICE_PAD = 0.35
 NARRATION_LEAD = 0.5   # narration starts this long after its shot begins
 
@@ -102,7 +103,9 @@ def build(storyboard: dict) -> dict:
             visual = [last_visual]   # a voice recording needs a picture under it
         if not visual:
             continue
-        clip_len = sum(min(m["duration"] or 0, MAX_CLIP) for m in visual if m["kind"] == "video")
+        def clip_cap(m):
+            return MAX_CLIP if any(u["id"] in sc["voice_line_ids"] for u in m.get("said", [])) else MAX_SILENT_CLIP
+        clip_len = sum(min(m["duration"] or 0, clip_cap(m)) for m in visual if m["kind"] == "video")
         n_stills = sum(1 for m in visual if m["kind"] == "photo")
         still_dur = (min(MAX_STILL, max(MIN_STILL, (sc["target_sec"] - clip_len) / n_stills + XFADE))
                      if n_stills else 0)
@@ -119,7 +122,7 @@ def build(storyboard: dict) -> dict:
             else:
                 said = [u for u in m["said"] if u["id"] in sc["voice_line_ids"]]
                 t0 = max(0.0, (said[0]["t0"] or 0) - 0.3) if said else 0.0
-                shot.update(dur=round(min((m["duration"] or 5) - t0, MAX_CLIP) + XFADE, 2), t0=t0,
+                shot.update(dur=round(min((m["duration"] or 5) - t0, clip_cap(m)) + XFADE, 2), t0=t0,
                             own_audio=True,
                             subtitle=" ".join(_line_text(u, lang) for u in said) if said else None)
             if si == 0 and k == 0:
@@ -141,8 +144,9 @@ def build(storyboard: dict) -> dict:
                                    "t1": min(m["duration"] or 1e9, (u["t1"] or (m["duration"] or 0)) + VOICE_PAD),
                                    "scene": sc["order"], "text": _line_text(u, lang), "speaker": u.get("speaker")})
     if shots:
-        last = shots[-1]
-        shots.append({"kind": "end", "moment": last["moment"], "path": last["path"], "focus": last.get("focus"),
+        last, opening = shots[-1], shots[0]
+        # the closing card rests on the opening picture, blurred: a callback, and never the last shot repeated
+        shots.append({"kind": "end", "moment": opening["moment"], "path": opening["path"], "focus": opening.get("focus"),
                       "dur": END_S, "text": script.get("closing_card") or "", "scene": last["scene"]})
     return retime({"shots": shots, "voices": voices, "xfade": XFADE,
                    "aspect": brief.get("aspect", "16:9"), "music_mood": brief.get("music_mood", "warm"),

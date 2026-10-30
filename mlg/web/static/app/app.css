@@ -555,3 +555,8 @@ select.field { appearance: none; padding-right: 36px; background-image: linear-g
   .filmstats b { font-size: 20px; }
   .screening h1 { font-size: 26px; }
 }
+
+.blindwin { display: flex; flex-direction: column; gap: 4px; margin-bottom: 14px; padding: 10px 12px; border-radius: 14px;
+            background: #1d2a22; border: 1px solid #2f7d5b; font-size: 13px; color: #cfe8da; }
+.blindwin b { color: #8be0b4; display: flex; gap: 6px; align-items: center; }
+.blindwin .icon { width: 16px; height: 16px; }

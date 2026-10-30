@@ -345,6 +345,8 @@ async function home() {
           <div><b>${f.made_in ? Math.round(f.made_in / 60) : '–'}</b><span>minutes</span></div>
           <div><b>${f.asked}</b><span>asked you</span></div>
           <div><b>${(v1.notes || []).length}</b><span>critic notes</span></div></div>
+        ${f.blind && f.blind.winner === 'v2' ? `<div class="blindwin"><b>${ic('check')} Blind test: Muse preferred the re-cut</b>
+          <span>Shown both cuts without being told which was which.${f.blind.reason ? ` “${esc(f.blind.reason)}”` : ''}</span></div>` : ''}
         <p class="small">The crew read ${o.photos.toLocaleString()} photos and ${o.videos} videos, wrote the story, checked every picture,
           cut a first version, then <b>watched it</b> — and re-cut it from the critic's notes. It stopped to ask about faces only you know.</p>
         <div class="chips"><a class="btn primary" href="#/films">${ic('film')}Make your own film</a>
@@ -1001,6 +1003,9 @@ function versionHtml(st, v) {
       ${x.score != null ? `<span class="score">${x.score}<span class="small faint">/10</span></span>` : ''}</div>
     <video id="vid_${v}" controls preload="metadata" playsinline src="/api/films/${enc(st.id)}/video/${v}?d=${x.duration}" style="margin-top:10px"></video>
     <div class="small muted" style="margin-top:8px">${x.duration ? x.duration.toFixed(0) + ' s · ' : ''}${esc(x.summary || '')}</div>
+    ${v === 'v2' && st.blind ? `<div class="note ${st.blind.winner === 'v2' ? 'applied' : ''}"><b>Blind test:</b> ${{v2: 'Muse preferred this re-cut',
+      v1: 'Muse preferred the first cut', same: 'no clear preference'}[st.blind.winner]} — shown both without being told which was which.
+      <div class="small muted">${esc(st.blind.reason || '')}</div></div>` : ''}
     ${v === 'v1' && x.notes ? x.notes.map(n => { const ap = (st.applied || []).some(a => a.includes(`shot ${n.shot}: ${n.op}`));
       return `<div class="note ${ap ? 'applied' : ''}"><button class="btn sm ghost" data-seek="${v}" data-t="${n.t}">${Math.floor(n.t / 60)}:${String(Math.floor(n.t % 60)).padStart(2, '0')}</button>
         <b>${esc(n.op)}</b>${ap ? ' · fixed in v2' : ''}<div>${esc(n.problem)}</div></div>`; }).join('') : ''}</div>`;

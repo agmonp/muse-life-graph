@@ -240,3 +240,17 @@ def test_on_the_hosted_demo_an_answer_shapes_the_film_but_not_the_graph(monkeypa
     m = sb["moments"][q["moment"]]
     assert any(f["id"] == "person:ruth" for f in m["faces"])          # the film knows who it is
     assert "for this film" in q["outcome"]
+
+
+def test_a_film_keeps_one_of_near_identical_pictures():
+    from mlg.studio import plan
+    script, ms = _blessing_world()
+    script["scenes"] = [{"order": 1, "moment_ids": ["p1", "p2"], "voice_line_ids": [], "target_sec": 8},
+                        {"order": 2, "moment_ids": ["p3"], "voice_line_ids": [], "target_sec": 4},
+                        {"order": 3, "moment_ids": ["p4", "p2"], "voice_line_ids": [], "target_sec": 8}]
+    for m in ms:
+        m["_looks"] = {"p2": [0b1111], "p4": [0b1110]}.get(m["id"], [int(m["id"][1:]) << 40] if m["kind"] == "photo" else [])
+    notes = plan.drop_near_duplicates(script, ms)
+    assert script["scenes"][2]["moment_ids"] == ["p4"] or script["scenes"][2]["moment_ids"] == ["p2"]
+    assert script["scenes"][1]["moment_ids"] == ["p3"]          # a scene never loses its only picture
+    assert notes

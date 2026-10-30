@@ -828,7 +828,8 @@ def api_featured():
         v2 = (st.get("versions") or {}).get("v2") or {}
         if st.get("status") != "done" or not (d / "v2" / "film.mp4").exists():
             continue
-        key = (v2.get("score") or 0, st.get("created", 0))
+        pinned = (FILMS / "featured.txt").exists() and (FILMS / "featured.txt").read_text().strip() == st["id"]
+        key = (pinned, (st.get("blind") or {}).get("winner") == "v2", v2.get("score") or 0, st.get("created", 0))
         if best is None or key > best[0]:
             best = (key, st)
     if not best:
@@ -839,6 +840,7 @@ def api_featured():
     first = next((m for sc in st.get("scenes") or [] for m in sc.get("moments") or []), None)
     return {"film": {"id": st["id"], "title": st.get("title"), "request": st["request"], "versions": vs,
                      "applied": st.get("applied") or [], "crew": crew, "scenes": len(st.get("scenes") or []),
+                     "blind": st.get("blind"),
                      "made_in": round(st["log"][-1]["t"]) if st.get("log") else None,
                      "asked": sum(1 for q in st.get("questions") or [] if q.get("answer") not in (None, "__crew__")),
                      "cover": first.split(":")[0] if first else None}}

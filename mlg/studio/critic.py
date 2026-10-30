@@ -116,3 +116,25 @@ def apply(edl: dict, critique: dict) -> tuple[dict, list[str]]:
                 done.append(f"{tag} ({n['why']})")
     edl["shots"] = [s for k, s in enumerate(shots) if k not in removed]
     return retime(edl), done
+
+
+PAIR = ("You are judging two cuts of the same short personal film, A and B. They use the same photos; one "
+        "may be shorter, re-ordered or re-captioned. Ignore resolution and sharpness differences - judge only "
+        "the editing: pacing, order, captions and the ending. Which cut is better? In `reason`, say in one "
+        "sentence what makes the better cut better, without naming A or B.")
+PAIR_SCHEMA = {"type": "object", "additionalProperties": False, "required": ["better", "reason"],
+               "properties": {"better": {"type": "string", "enum": ["A", "B", "same"]},
+                              "reason": {"type": "string"}}}
+
+
+def blind(v1: Path, v2: Path, seed: str) -> dict:
+    """Muse Wonder watches both cuts in an order it is not told, and picks one. Scores drift and anchor
+    (a critic who gave the draft 6 tends to give its re-cut 6 too); a blind choice between the two does not."""
+    import random
+    flip = random.Random(seed).random() < 0.5
+    a, b = (v2, v1) if flip else (v1, v2)
+    ans = chat.ask([chat.text("CUT A:"), chat.video(a), chat.text("CUT B:"), chat.video(b)], system=PAIR,
+                   model=settings().heavy_model, schema=PAIR_SCHEMA, schema_name="pair", effort="medium",
+                   max_tokens=6000).data
+    winner = {"A": "v2" if flip else "v1", "B": "v1" if flip else "v2"}.get(ans.get("better"), "same")
+    return {"winner": winner, "reason": ans.get("reason", "")}

@@ -100,7 +100,7 @@ def overlay_for(shot: dict, W: int, H: int) -> np.ndarray | None:
         d.text((int(W * 0.045) + 2, int(H * 0.05) + 2), shot["year"], font=f, fill=(0, 0, 0, 150))
         d.text((int(W * 0.045), int(H * 0.05)), shot["year"], font=f, fill=(255, 255, 255, 235))
     if shot.get("kind") == "end":
-        dim = Image.new("RGBA", (W, H), (0, 0, 0, 120))
+        dim = Image.new("RGBA", (W, H), (0, 0, 0, 150))
         layer = Image.alpha_composite(dim, layer)
         if shot.get("text"):
             _text_block(layer, shot["text"], font("bold", int(short * 0.085)), H // 2, int(W * 0.84))
@@ -172,6 +172,8 @@ class Still:
         scale = min(1.0, W * 1.25 / min(iw, ih * W / H))
         if scale < 1.0:
             img = img.resize((max(1, int(iw * scale)), max(1, int(ih * scale))), Image.LANCZOS)
+        if shot.get("kind") == "end":   # the closing card is a card, not the last picture shown again
+            img = img.filter(ImageFilter.GaussianBlur(max(8, min(img.size) // 40)))
         self.img, self.W, self.H, self.dur = img, W, H, shot["dur"]
         iw, ih = img.size
         bw = min(iw, ih * W / H)

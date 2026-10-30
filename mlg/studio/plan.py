@@ -217,9 +217,31 @@ def _looks(m: dict) -> list[int]:
     return m["_looks"]
 
 
-def _looks_same(a: dict, b: dict) -> bool:
+def _looks_same(a: dict, b: dict, max_dist: int = phash.PHOTO_MAX_DIST) -> bool:
     """Perceptual, not byte equality: any frame of one within pHash distance of any frame of the other."""
-    return any(bin(x ^ y).count("1") <= phash.PHOTO_MAX_DIST for x in _looks(a) for y in _looks(b))
+    return any(bin(x ^ y).count("1") <= max_dist for x in _looks(a) for y in _looks(b))
+
+
+FILM_DUP_DIST = 12   # in a film, two shots of the same instant (a burst, a selfie taken twice) are one too many
+
+
+def drop_near_duplicates(script: dict, ms: list[dict]) -> list[str]:
+    """Keep the first of near-identical pictures in a film; a scene never loses its last picture."""
+    known = {m["id"]: m for m in ms}
+    kept, notes = [], []
+    for sc in sorted(script["scenes"], key=lambda s: s["order"]):
+        for mid in list(sc["moment_ids"]):
+            m = known.get(mid)
+            if not m or m["kind"] not in ("photo", "video"):
+                continue
+            twin = next((k for k in kept if _looks_same(m, known[k], FILM_DUP_DIST)), None)
+            pictures = [x for x in sc["moment_ids"] if known.get(x, {}).get("kind") in ("photo", "video")]
+            if twin and len(pictures) > 1:
+                sc["moment_ids"].remove(mid)
+                notes.append(f"scene {sc['order']}: a near-copy of an earlier picture taken out")
+            else:
+                kept.append(mid)
+    return notes
 
 
 def picture_blessings(script: dict, ms: list[dict], subject_ids: list[str], choose=None,
@@ -312,7 +334,8 @@ def plan(request: str, dataset: str = "real", template: str | None = None) -> di
     t1 = time.perf_counter()
     script = write_script(brief, ms)
     t2 = time.perf_counter()
-    notes = (validate(script, ms) + picture_blessings(script, ms, brief.get("subject_ids", []))
+    notes = (validate(script, ms) + drop_near_duplicates(script, ms)
+             + picture_blessings(script, ms, brief.get("subject_ids", []))
              + templates.check(brief["template"], script))
     return {"request": request, "dataset": dataset, "brief": brief, "script": script,
             "moments": {m["id"]: m for m in ms},
