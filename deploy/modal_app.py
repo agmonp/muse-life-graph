@@ -12,12 +12,16 @@ Secrets: `mlg-env` (the project .env: Meta key, Neo4j) plus MLG_SITE_CODE, the a
 """
 from __future__ import annotations
 
+import os
 from pathlib import Path
 
 import modal
 
 ROOT = Path(__file__).resolve().parent.parent
 APP_NAME = "muse-life-graph"
+# GPU functions need a payment method on the Modal account; without one (MLG_DEPLOY_GPU unset) the site
+# still runs and its new films get on-screen captions instead of narration and score
+GPU = os.environ.get("MLG_DEPLOY_GPU") == "1"
 app = modal.App(APP_NAME)
 site_vol = modal.Volume.from_name("mlg-site", create_if_missing=True)
 hf_vol = modal.Volume.from_name("mlg-hf", create_if_missing=True)
@@ -29,7 +33,7 @@ web_image = (
     .apt_install("ffmpeg", "fonts-dejavu-core", "libraqm0")
     .pip_install_from_requirements(str(ROOT / "requirements.txt"))
     .pip_install("modal")
-    .env({"MLG_DATA": "/site/data", "MLG_SITE_MEDIA": "/site/media", "MLG_GPU": "modal",
+    .env({"MLG_DATA": "/site/data", "MLG_SITE_MEDIA": "/site/media", "MLG_GPU": "modal" if GPU else "none",
           "MLG_MODAL_APP": APP_NAME, "PYTHONPATH": "/app"})
     .add_local_dir(str(ROOT / "mlg"), "/app/mlg", ignore=["__pycache__", "*.pyc"])
 )
@@ -46,7 +50,6 @@ gpu_image = (
 )
 
 
-@app.function(image=gpu_image, gpu="A10G", volumes={"/hf": hf_vol}, timeout=1800, scaledown_window=300)
 def gpu_jobs(jobs: list[dict]) -> list[dict]:
     """MusicGen scores and SeamlessM4T narration: the same worker the local app runs, results as bytes."""
     import time
@@ -62,6 +65,11 @@ def gpu_jobs(jobs: list[dict]) -> list[dict]:
         out.append(res)
     hf_vol.commit()
     return out
+
+
+if GPU:
+    gpu_jobs = app.function(image=gpu_image, gpu="A10G", volumes={"/hf": hf_vol}, timeout=1800,
+                            scaledown_window=300)(gpu_jobs)
 
 
 @app.function(image=web_image, volumes={"/site": site_vol}, secrets=[env, code], timeout=3600,
