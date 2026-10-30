@@ -56,7 +56,8 @@ def questions(sb: dict, roster: list[dict]) -> list[dict]:
                             (f" ({m['kind']} from {year})" if year else ""),
                     "why": f"the scene \"{sc['intent'][:80]}\" uses this picture, and the archive could not "
                            f"name the face ({(f.get('appearance') or '')[:70]})",
-                    "image": f"/api/crop/{f['obs']}", "context_image": f"/api/photo/{m['id'].split(':')[0]}",
+                    "image": f"/api/crop/{f['obs']}", "context_image": f"/api/photo/{m['id'].split(':')[0]}"
+                                     + (f"?frame={f['frame']}" if m["kind"] == "video" and f.get("frame") is not None else ""),
                     "options": opts, "default": NOBODY})
         if len(out) >= 2:
             break
@@ -122,14 +123,16 @@ def apply(sb: dict, qs: list[dict], answers: dict[str, str]) -> list[str]:
                     sc["moment_ids"].remove(q["moment"])   # the scene was about someone else
                     q["outcome"] += "; picture taken out of the scene"
             else:
-                pid = identity.confirm_face(q["obs"], a)
+                from mlg import site
+                # on the hosted demo the answer shapes this film only; the family's graph is not changed
+                pid = a if site.enabled() else identity.confirm_face(q["obs"], a)
                 name = next((o["label"] for o in q["options"] if o["value"] == a), a)
                 if face:
                     m["faces"].append({"id": pid, "name": name.removeprefix("Yes, "), "bbox": face["bbox"],
                                        "frame": face.get("frame"), "obs": face["obs"], "conf": 1.0, "by": "user"})
                     m["people"] = sorted({f["name"] for f in m["faces"]})
                     m["unknown"] = [f for f in m["unknown"] if f["obs"] != q["obs"]]
-                q["outcome"] = f"linked to {name.removeprefix('Yes, ')} in the graph"
+                q["outcome"] = f"linked to {name.removeprefix('Yes, ')}" + (" for this film" if site.enabled() else " in the graph")
         elif q["kind"] == "pick" and sc:
             default = q["default"]
             if a != default and a in ms:

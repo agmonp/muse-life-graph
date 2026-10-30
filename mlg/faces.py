@@ -224,3 +224,42 @@ def groups(skip: set[str] | None = None) -> dict:
     loose = [o for o in open_ if o["id"] not in vecs]
     return {"groups": out, "no_fingerprint": len([o for o in loose if o["id"] in known]),
             "waiting": len([o for o in loose if o["id"] not in known]), "open": len(open_), "job": dict(JOB)}
+
+
+# ---------------- groups for the screen: computed once, answers removed at once, regrouped after a pause ----
+
+_GROUPS: dict = {"data": None, "answered": set(), "dirty_at": 0.0, "running": False}
+REGROUP_AFTER_S = 20   # answers make better suggestions; regroup once the owner pauses
+
+
+def cached_groups() -> dict:
+    """The face groups without the faces answered since they were computed (an 11 s job, not per click)."""
+    if _GROUPS["data"] is None:
+        refresh()
+    elif _GROUPS["dirty_at"] and time.time() - _GROUPS["dirty_at"] > REGROUP_AFTER_S and not _GROUPS["running"]:
+        threading.Thread(target=refresh, daemon=True).start()
+    g, done = _GROUPS["data"], _GROUPS["answered"]
+    out = []
+    for x in g["groups"]:
+        keep = [f for f in x["faces"] if f["id"] not in done]
+        if keep:
+            out.append({**x, "faces": keep, "size": len(keep), "photos": len({f["sha"] for f in keep})})
+    return {**g, "groups": out, "open": g["open"] - len(done)}
+
+
+def answered(ids: list[str]) -> None:
+    _GROUPS["answered"].update(ids)
+    _GROUPS["dirty_at"] = _GROUPS["dirty_at"] or time.time()
+
+
+def refresh() -> None:
+    _GROUPS["running"] = True
+    try:
+        since = time.time()
+        data = groups()
+        _GROUPS["data"] = data
+        _GROUPS["answered"] = set()
+        if _GROUPS["dirty_at"] and _GROUPS["dirty_at"] < since:
+            _GROUPS["dirty_at"] = 0.0
+    finally:
+        _GROUPS["running"] = False

@@ -167,6 +167,8 @@ def warm_up():
             library.memories()
             network.build()
             network.insights()
+            from mlg import faces
+            faces.refresh()
         except Exception as e:  # noqa: BLE001 - the first visitor then computes it instead
             print("warm-up failed:", e)
     threading.Thread(target=run, daemon=True).start()
@@ -199,7 +201,8 @@ def _or404(x):
 
 @app.get("/api/overview")
 def api_overview():
-    return library.overview()
+    return {**library.overview(), "site": site.enabled(),
+            "repo": "https://github.com/agmonp/muse-life-graph"}
 
 
 @app.get("/api/memories")
@@ -375,8 +378,9 @@ def api_crop(oid: str):
 
 
 @app.get("/api/photo/{sha}")
-def api_photo(sha: str):
-    out = CROP_CACHE / f"photo_{sha[:24]}.jpg"
+def api_photo(sha: str, frame: int | None = None):
+    """A preview of a media item; for a video, its middle keyframe or the keyframe `frame` (a face's frame)."""
+    out = CROP_CACHE / (f"photo_{sha[:24]}.jpg" if frame is None else f"photo_{sha[:24]}_f{frame}.jpg")
     if not out.exists():
         with session() as s:
             r = s.run("MATCH (mi:MediaItem {id: $id}) RETURN mi.path AS path, mi.kind AS kind", id=sha).single()
@@ -388,7 +392,8 @@ def api_photo(sha: str):
         if r["kind"] == "video":
             from mlg.perceive.keyframes import keyframes
             frames = keyframes(Path(r["path"]))
-            img = open_image(frames[len(frames) // 2][1])
+            k = len(frames) // 2 if frame is None else min(max(frame, 0), len(frames) - 1)
+            img = open_image(frames[k][1])
         else:
             img = open_image(Path(r["path"]))
         img.thumbnail((900, 900))
@@ -443,7 +448,7 @@ def api_faces(dataset: str = "real", limit: int = 40, unclear: bool = False):
 @app.get("/api/face_groups")
 def api_face_groups(limit: int = 30, per: int = 24):
     from mlg import faces
-    g = faces.groups()
+    g = faces.cached_groups()
     if g["waiting"] and not faces.JOB["running"]:
         threading.Thread(target=faces.index, daemon=True).start()
     people = {p["id"]: p for p in library.people_list()}
@@ -479,6 +484,8 @@ def api_answer_group(a: GroupAnswer):
         except ValueError:
             continue   # a face that cannot be cropped any more; the rest still count
     library.invalidate()
+    from mlg import faces
+    faces.answered(done)
     return {"ok": True, "person_id": pid, "done": done}
 
 
@@ -505,6 +512,8 @@ def api_answer(a: Answer):
     else:
         raise HTTPException(400, "unknown action")
     library.invalidate()
+    from mlg import faces
+    faces.answered([a.obs_id])
     return {"ok": True, "person_id": pid}
 
 
@@ -522,6 +531,9 @@ def api_undo(u: Undo):
                  WITH o OPTIONAL MATCH (:Person)-[r:OBSERVED_AS {confirmed_by: 'user'}]->(o) DELETE r""",
               oid=u.obs_id).consume()
     library.invalidate()
+    from mlg import faces
+    faces._GROUPS["answered"].discard(u.obs_id)   # the face is open again
+    faces._GROUPS["dirty_at"] = faces._GROUPS["dirty_at"] or time.time()
     return {"ok": True}
 
 

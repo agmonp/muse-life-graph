@@ -105,6 +105,14 @@ def search(q: str, limit: int = 60) -> dict:
             why[i] = hits
             if must and not any(w in hay for w in must):
                 scores[i] *= 0.35          # matches only a synonym: keep it, lower
+        # a broad word ("friends") matches half the library; keep the moments that match the main words,
+        # unless that leaves too few to be useful
+        if must:
+            strong = {i for i in scores if why.get(i) and any(w.lower() in {h.lower() for h in why[i]} for w in must)}
+            if len(strong) >= 8:
+                scores = {i: s for i, s in scores.items() if i in strong}
+            top = max(scores.values(), default=0)
+            scores = {i: s for i, s in scores.items() if s >= 0.25 * top} or scores
     elif u["people"] or u["year_from"] or u["kinds"]:
         scores = {i: 1.0 for i in range(len(ms))}
     out = _filter(ms, ppl, u, scores, why, strict_people=True)

@@ -16,6 +16,28 @@ py -3.13 -m venv .venv
 Copy-Item .env.example .env   # then fill in keys
 ```
 
+## Run it on your own photos
+
+Muse Life Graph is made to run where your photos are: on your own computer. It reads a folder or your
+Facebook / Instagram download in place; the files never leave your machine. Only the calls to Meta's models
+(Muse Spark, Wonder, Voice Transcribe, Muse Image) and the graph database (Neo4j AuraDB Free, or a local Neo4j)
+are online. The [live demo](https://agmonporat--muse-life-graph-web.us-east.modal.run) shows one family's graph,
+shared with consent; there names are read-only.
+
+```powershell
+git clone https://github.com/agmonp/muse-life-graph; cd muse-life-graph
+py -3.13 -m venv .venv
+.\.venv\Scripts\python.exe -m pip install -r requirements.txt
+Copy-Item .env.example .env        # your Meta Model API key + Neo4j connection
+.\.venv\Scripts\python.exe -m mlg.graph.db                                  # create the graph schema
+.\.venv\Scripts\python.exe -m uvicorn mlg.web.app:app --port 8800          # open http://localhost:8800
+```
+
+Then choose **Add photos**: a folder on your computer, or the .zip files from Meta's *Download your information*.
+The app fingerprints every file (copies are set aside), shows the cost before Muse looks (about $0.006 a photo),
+and builds your memories, people, circles and films. Music and narration use Meta's open MusicGen and SeamlessM4T
+on your GPU (`.venv-gpu`, see `mlg/studio/gpu_worker.py`); without one, films get on-screen captions.
+
 ## Phase 1 (built 2026-10-26)
 
 | Module | What it does |

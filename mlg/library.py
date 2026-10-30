@@ -281,7 +281,8 @@ def people_list() -> list[dict]:
         for pid in m["people"]:
             if m["date"]:
                 years[pid].append(m["date"][:4])
-    out = [{"id": pid, "name": p["name"], "relation": p.get("relation"), "owner": bool(p.get("owner")),
+    out = [{"id": pid, "name": p["name"], "name_en": p.get("name_en"), "relation": p.get("relation"),
+            "owner": bool(p.get("owner")),
             "count": seen.get(pid, 0), "from": min(years[pid]) if years[pid] else None,
             "to": max(years[pid]) if years[pid] else None} for pid, p in ppl.items()
            if seen.get(pid) or p.get("owner")]   # people named elsewhere but not in any picture here stay out
@@ -303,8 +304,8 @@ def person(pid: str) -> dict | None:
     places = Counter(m["place"] for m in mine if m["place"])
     moods = Counter(x for m in mine for x in m["mood"])
     p = ppl[pid]
-    return {"id": pid, "name": p["name"], "relation": p.get("relation"), "owner": bool(p.get("owner")),
-            "count": len(mine), "videos": sum(1 for m in mine if m["kind"] == "video"),
+    return {"id": pid, "name": p["name"], "name_en": p.get("name_en"), "relation": p.get("relation"),
+            "owner": bool(p.get("owner")), "count": len(mine), "videos": sum(1 for m in mine if m["kind"] == "video"),
             "years": sorted(by_year.items()),
             "with": [{"id": o, "name": ppl[o]["name"], "count": c} for o, c in with_.most_common(12) if o in ppl],
             "places": [x for x, _ in places.most_common(6)], "mood": [x for x, _ in moods.most_common(4)],

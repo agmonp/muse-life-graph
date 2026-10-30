@@ -226,3 +226,17 @@ def test_blessing_with_no_spare_photo_joins_a_scene_with_changing_pictures():
     assert two["moment_ids"] == ["p2", "p3", "b1"] and two["voice_line_ids"] == ["u1", "u2"]
     assert two["target_sec"] == 18 and two["narration"] is None
     assert "moved over scene 2" in notes[-1]
+
+
+def test_on_the_hosted_demo_an_answer_shapes_the_film_but_not_the_graph(monkeypatch):
+    from mlg import identity, site
+    from mlg.studio import ask
+    monkeypatch.setattr(site, "MEDIA", "/site/media")
+    monkeypatch.setattr(identity, "confirm_face", lambda *a, **k: (_ for _ in ()).throw(AssertionError("graph write")))
+    sb = _sb()
+    qs = ask.questions(sb, ROSTER)
+    q = next(q for q in qs if q["kind"] == "identity")
+    ask.apply(sb, qs, {q["id"]: "person:ruth"})
+    m = sb["moments"][q["moment"]]
+    assert any(f["id"] == "person:ruth" for f in m["faces"])          # the film knows who it is
+    assert "for this film" in q["outcome"]

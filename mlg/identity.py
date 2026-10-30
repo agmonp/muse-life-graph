@@ -48,7 +48,8 @@ def confirm_face(obs_id: str, person_id: str | None = None, new_name: str | None
                      RETURN o.bbox AS bbox, o.frame AS frame, mi.path AS path, mi.kind AS kind""", id=obs_id).single()
     if not o:
         raise KeyError(obs_id)
-    crop = person_crop(o["path"], o["kind"], o["bbox"], o["frame"])
+    from mlg import site
+    crop = person_crop(site.local(o["path"]), o["kind"], o["bbox"], o["frame"])
     added_ref = None
     if new_name:
         if crop is None:

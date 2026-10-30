@@ -7,6 +7,8 @@ the screenwriter may only build scenes from these moment ids.
 """
 from __future__ import annotations
 
+from pathlib import Path
+
 from mlg import site
 from mlg.graph.db import session
 from mlg.people import dataset_of
@@ -44,6 +46,8 @@ def moments(dataset: str = "real", person_ids: list[str] | None = None) -> list[
         if dataset_of(r["path"]) != dataset:
             continue
         r["path"] = site.local(r["path"])
+        if not Path(r["path"]).exists():
+            continue   # an unplugged drive or a missing copy: the crew works with what it can open
         r["faces"] = [f for f in r["faces"] if f.get("id")]
         r["unknown"] = [f for f in r["unknown"] if f.get("obs")]
         r["people"] = sorted({f["name"] for f in r["faces"]})

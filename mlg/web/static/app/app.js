@@ -31,6 +31,7 @@ function memWhen(x) {
   if (!x.precise) return x.date.slice(0, 4) === x.end.slice(0, 4) ? `around ${x.date.slice(0, 4)}` : `${x.date.slice(0, 4)}–${x.end.slice(0, 4)}`;
   return when(x.date, 'exif');
 }
+const en = p => (p && (p.name_en || p.name)) || '';   // film requests are written in English
 const initials = n => (n || '?').split(/\s+/).map(w => w[0]).join('').slice(0, 2).toUpperCase();
 function avatar(p, cls = '') {
   return `<img class="${cls}" src="${ref(p.id)}" alt="${esc(p.name)}" title="${esc(p.name)}" loading="lazy" data-name="${esc(p.name)}">`;
@@ -119,6 +120,7 @@ async function route() {
   if (token !== navToken) return;
   if (OV && !OV.photos && !OV.videos && name !== 'add') return welcome();
   shell(name);
+  demoBanner();
   const page = $('#page');
   page.innerHTML = '<div class="skeleton" style="height:220px"></div>';
   window.scrollTo(0, 0);
@@ -156,6 +158,36 @@ function memCard(x) {
     <div class="meta"><span>${esc(memWhen(x))}</span><span class="avatars">${x.people.slice(0, 4).map(p => avatar(p)).join('')}</span></div>
     <h3 dir="auto">${esc(x.title)}</h3>
     <p class="line" dir="auto">${esc(x.line || '')}</p></a>`;
+}
+
+/* ---------------- the hosted demo ---------------- */
+function demoBanner() {
+  if (!OV || !OV.site || $('#demo-banner')) return;
+  let closed = false;
+  try { closed = sessionStorage.getItem('demo-banner') === 'closed'; } catch (e) { /* private mode */ }
+  if (closed) return;
+  $('#page').insertAdjacentHTML('beforebegin', `<div id="demo-banner" class="demo-banner">
+    <span><b>A live demo.</b> This is one family's real life graph, shared with their consent: ${OV.photos.toLocaleString()} photos and
+    ${OV.videos} videos, read by Muse. The product itself runs on <b>your own computer, on your own photos</b> — nothing leaves it
+    except the calls to Meta's models. Here you can browse, search, ask and make films; names can't be changed.</span>
+    <span class="chips"><a class="btn sm primary" href="${esc(OV.repo)}#run-it-on-your-own-photos" target="_blank" rel="noopener">Run it on your photos</a>
+    <button class="btn sm ghost" data-close aria-label="Close">${ic('close')}</button></span></div>`);
+  $('#demo-banner [data-close]').onclick = () => {
+    $('#demo-banner').remove();
+    try { sessionStorage.setItem('demo-banner', 'closed'); } catch (e) { /* private mode */ }
+  };
+}
+
+function siteAddPage() {
+  return `<div class="phead"><div><div class="eyebrow">Add photos</div><h1>On your own computer</h1>
+      <p>This demo shows one family's library. Muse Life Graph is made to run where your photos are: on your computer,
+      reading a folder or your Facebook / Instagram download in place. Your files never leave it.</p></div></div>
+    <div class="card pad steps">
+      <div class="step"><span class="dot">1</span><div><b>Install</b><div class="small muted">Python 3.12+, then the project from GitHub (one command in the README).</div></div></div>
+      <div class="step"><span class="dot">2</span><div><b>Your Meta Model API key</b><div class="small muted">Muse Spark, Wonder, Voice Transcribe and Muse Image do the understanding.</div></div></div>
+      <div class="step"><span class="dot">3</span><div><b>Choose a folder or your Meta download</b><div class="small muted">Copies are found and set aside, the cost is shown before Muse looks.</div></div></div>
+      <div class="step"><span class="dot">4</span><div><b>Your life graph</b><div class="small muted">Memories, people, circles, search and films, all on your machine.</div></div></div>
+      <a class="btn primary" style="align-self:flex-start;margin-top:8px" href="${esc(OV.repo)}#run-it-on-your-own-photos" target="_blank" rel="noopener">Instructions on GitHub</a></div>`;
 }
 
 /* ---------------- welcome / import ---------------- */
@@ -219,6 +251,7 @@ function metaModal() {
 
 let importTimer = null;
 async function addPage() {
+  if (OV && OV.site) return siteAddPage();
   const st = await api('/api/import');
   const w = st.waiting;
   const pct = st.total ? Math.round(100 * st.done / st.total) : 0;
@@ -272,6 +305,7 @@ async function refreshAdd() {
   afterRender.add();
 }
 afterRender.add = () => {
+  if (OV && OV.site) return;
   bindSources();
   const go = async (limit) => {
     try { await api(`/api/import/look${limit ? `?limit=${limit}` : ''}`, {}); refreshAdd(); } catch (e) { toast(e.message); }
@@ -290,7 +324,9 @@ async function home() {
   const hero = o.on_this_day[0] || o.recent.find(x => x.people.length) || o.recent[0];
   const heroLabel = o.on_this_day[0] ? `On this day · ${hero.years_ago} year${hero.years_ago > 1 ? 's' : ''} ago` : 'A memory';
   const asks = [`When was I happiest?`, `Photos of me as a child`, o.recent[1] ? `Tell me about ${o.recent[1].title}` : 'Who do I spend the most time with?'];
-  const faces = await api('/api/faces?limit=6').catch(() => ({faces: [], total: 0}));
+  // the face groups are computed ahead; their first faces make the stack
+  const fg = await api('/api/face_groups?limit=5&per=1').catch(() => ({groups: [], open: 0}));
+  const faces = {total: fg.open || 0, faces: fg.groups.map(g => ({id: g.faces[0].id}))};
   return `<div class="hello">
       <div class="intro">
         <div class="eyebrow">${greeting()}${o.owner ? `, ${esc(o.owner)}` : ''}</div>
@@ -307,7 +343,9 @@ async function home() {
     </div>
     ${faces.total ? `<div class="section card needs">
       <div class="facestack">${faces.faces.slice(0, 5).map(f => `<img src="/api/crop/${enc(f.id)}" alt="" loading="lazy">`).join('')}</div>
-      <div><h3>${faces.total} faces Muse couldn't name yet</h3><div class="small muted">Name a few — every film and search gets better, and Muse learns to recognise them next time.</div></div>
+      <div><h3>${faces.total.toLocaleString()} faces Muse couldn't name yet</h3><div class="small muted">${OV.site
+        ? 'Faces that look alike are grouped, so one answer names many. (On this demo, answers are kept for your visit only.)'
+        : 'Faces that look alike are grouped, so one answer names many — and Muse learns to recognise them next time.'}</div></div>
       <a class="btn primary" href="#/faces">Who is this? ${ic('arrow')}</a></div>` : ''}
     <div class="section"><div class="section-head"><div><h2>Recent memories</h2><p class="muted small">Moments that belong together, titled by Muse</p></div>
       <a class="btn ghost sm" href="#/memories">All memories ${ic('arrow')}</a></div>
@@ -333,7 +371,7 @@ async function memories(_, params) {
   const shown = y ? all.filter(x => x.date.startsWith(y)) : all;
   return `<div class="phead"><div><div class="eyebrow">Memories</div><h1>Moments that belong together</h1>
       <p>Muse groups the pictures of one day, one trip or one old album page, and names each memory from what it sees.</p></div></div>
-    <div class="chips" style="margin-bottom:24px"><a class="chip ${y ? '' : 'on'}" href="#/memories">All</a>
+    <div class="chips yearchips" style="margin-bottom:24px"><a class="chip ${y ? '' : 'on'}" href="#/memories">All</a>
       ${years.map(v => `<a class="chip ${v === y ? 'on' : ''}" href="#/memories?year=${v}">${v}</a>`).join('')}</div>
     ${shown.length ? `<div class="mgrid">${shown.map(memCard).join('')}</div>` : '<div class="empty">No memories yet.</div>'}`;
 }
@@ -396,8 +434,8 @@ async function person(pid) {
           ${p.years.length ? `<div><b>${p.years[0][0]}${p.years.length > 1 ? '–' + p.years.at(-1)[0] : ''}</b><span>years</span></div>` : ''}
           <div><b>${p.with.length}</b><span>people with</span></div></div>
         <div class="chips" style="margin-top:18px">
-          <a class="btn primary sm" href="#/films?req=${enc(`A 60-second birthday film for ${p.name}, warm and a little funny.`)}">${ic('cake')}Birthday film</a>
-          <a class="btn sm" href="#/search?q=${enc(`Tell me about ${p.name}`)}">${ic('sparkle')}Ask about ${esc(p.name.split(' ')[0])}</a>
+          <a class="btn primary sm" href="#/films?req=${enc(`A 60-second birthday film for ${en(p)}, warm and a little funny.`)}">${ic('cake')}Birthday film</a>
+          <a class="btn sm" href="#/search?q=${enc(`Tell me about ${en(p)}`)}">${ic('sparkle')}Ask about ${esc(p.name.split(' ')[0])}</a>
           <button class="btn sm" id="bless" data-pid="${esc(p.id)}">${ic('mic')}Ask for blessings</button></div></div></div>
     <div class="two section"><div>
         ${p.memories.length ? `<div class="section-head" style="margin-top:0"><h2>Memories</h2></div><div class="row-scroll">${p.memories.map(memCard).join('')}</div>` : ''}
@@ -532,7 +570,7 @@ afterRender.connections = async (_, params) => {
     side.innerHTML = `<button class="btn sm ghost" data-focus="${esc(a)}">${ic('back')}${esc(na.name)}</button>
       <h3 style="margin:10px 0 4px" dir="auto">${esc(na.name)} & ${esc(nb.name)}</h3><div class="small muted" style="margin-bottom:10px">${ms.length} pictures</div>
       ${photosHtml(ms.slice(0, 16)).replace('class="photos"', 'class="photos" style="columns:2 120px"')}
-      <a class="btn sm primary" style="margin-top:10px" href="#/films?req=${enc(`A one-minute film about ${na.name} and ${nb.name} together, from the first picture to the last.`)}">${ic('film')}Film of the two</a>`;
+      <a class="btn sm primary" style="margin-top:10px" href="#/films?req=${enc(`A one-minute film about ${en(na)} and ${en(nb)} together, from the first picture to the last.`)}">${ic('film')}Film of the two</a>`;
   };
   side.onclick = e => {
     const f = e.target.closest('[data-focus]'); if (f) { e.preventDefault(); return focus(f.dataset.focus); }
@@ -641,26 +679,39 @@ afterRender.faces = (_, params) => {
   const send = async (card, body, label) => {
     const ids = $$('.gface:not(.off)', card).map(b => b.dataset.o);
     if (!ids.length) return toast('Every face is left out — nothing to save');
-    card.style.opacity = .35;
+    const n = `${ids.length} ${ids.length === 1 ? 'face' : 'faces'}`;
+    // answer at once: the card goes, the server catches up in the background
+    const next = card.nextElementSibling, parent = card.parentNode;
+    card.remove();
+    GROUPS.groups = GROUPS.groups.filter(g => g.id !== card.dataset.g);
+    GROUPS.total_groups = Math.max(0, GROUPS.total_groups - 1);
+    if ($('#gleft')) $('#gleft').textContent = GROUPS.total_groups;
+    if (OV) { OV.unknown_faces = Math.max(0, OV.unknown_faces - ids.length); shell('faces'); }
+    if (OV && OV.site) { toast(`${label} · ${n} — a demo: kept for this visit, the family's graph is not changed`); return refill(); }
+    toast(`${label} · ${n}`, async () => { await Promise.all(ids.map(id => api('/api/undo', {obs_id: id}))); route(); });
+    try { await api('/api/answer_group', {obs_ids: ids, ...body}); }
+    catch (e) { parent.insertBefore(card, next); toast(`Not saved: ${e.message}`); }
+    refill();
+  };
+  // more cards in the background when few are left; the server regroups with the new names on its own
+  let refilling = false;
+  const refill = async () => {
+    if (refilling || GROUPS.groups.length >= 5) return;
+    refilling = true;
     try {
-      const r = await api('/api/answer_group', {obs_ids: ids, ...body});
-      if (OV) OV.unknown_faces = Math.max(0, OV.unknown_faces - r.done.length);
-      shell('faces');
-      toast(`${label} · ${r.done.length} ${r.done.length === 1 ? 'face' : 'faces'}`, async () => {
-        for (const id of r.done) await api('/api/undo', {obs_id: id});
-        route();
-      });
-      card.remove();
-      // names just given make the next suggestions better: regroup with them
-      GROUPS = await api('/api/face_groups');
-      drawGroups();
-    } catch (e) { card.style.opacity = 1; toast(e.message); }
+      const shown = new Set($$('#grouplist [data-g]').map(c => c.dataset.g));
+      const g = await api('/api/face_groups');
+      const fresh = g.groups.filter(x => !shown.has(x.id));
+      GROUPS = {...g, groups: [...GROUPS.groups, ...fresh]};
+      $('#grouplist').insertAdjacentHTML('beforeend', fresh.map(groupHtml).join(''));
+    } catch (e) { /* the next answer tries again */ }
+    refilling = false;
   };
   $('#grouplist').onclick = e => {
     const card = e.target.closest('[data-g]'); if (!card) return;
     const x = GROUPS.groups.find(g => g.id === card.dataset.g);
     const f = e.target.closest('.gface'); if (f) { f.classList.toggle('off'); return; }
-    const b = e.target.closest('button'); if (!b || b.type === 'submit') return;
+    const b = e.target.closest('button'); if (!b || b.closest('form')) return;   // the Add button belongs to the name form
     if (b.dataset.pid) { const p = GROUPS.people.find(q => q.id === b.dataset.pid); return send(card, {action: 'confirm', person_id: p.id}, `Saved: ${p.name}`); }
     if (b.dataset.a === 'yes') return send(card, {action: 'confirm', person_id: x.suggest.id}, `Saved: ${x.suggest.name}`);
     if (b.dataset.a === 'skip') return send(card, {action: 'skip'}, 'Skipped');
@@ -699,21 +750,22 @@ function drawFaces() {
 function afterUnclear() {
   drawFaces();
   const answer = async (card, body, label) => {
-    card.style.opacity = .35;
+    const id = card.dataset.f, next = card.nextElementSibling, parent = card.parentNode;
+    card.remove();
+    FACES.faces = FACES.faces.filter(f => f.id !== id); FACES.total--;
+    $('#facecount').textContent = `${FACES.total} faces to go`;
+    if (OV) { OV.unknown_faces = Math.max(0, OV.unknown_faces - 1); shell('faces'); }
+    if (OV && OV.site) return toast(`${label} — a demo: kept for this visit, the family's graph is not changed`);
+    toast(label, async () => { await api('/api/undo', {obs_id: id}); route(); });
     try {
-      await api('/api/answer', {obs_id: card.dataset.f, ...body});
-      FACES.faces = FACES.faces.filter(f => f.id !== card.dataset.f); FACES.total--;
-      if (OV) OV.unknown_faces = Math.max(0, OV.unknown_faces - 1);
-      const id = card.dataset.f;
-      toast(label, async () => { await api('/api/undo', {obs_id: id}); route(); });
-      card.remove(); $('#facecount').textContent = `${FACES.total} faces to go`; shell('faces');
+      await api('/api/answer', {obs_id: id, ...body});
       if (body.new_name) PEOPLE = await api('/api/people');
       if (FACES.faces.length < 5 && FACES.total > FACES.faces.length) { FACES = await api('/api/faces?limit=30&unclear=1'); drawFaces(); }
-    } catch (e) { card.style.opacity = 1; toast(e.message); }
+    } catch (e) { parent.insertBefore(card, next); toast(`Not saved: ${e.message}`); }
   };
   $('#facelist').onclick = e => {
     const card = e.target.closest('[data-f]'); if (!card) return;
-    const b = e.target.closest('button'); if (!b || b.type === 'submit') return;
+    const b = e.target.closest('button'); if (!b || b.closest('form')) return;   // the Add button belongs to the name form
     if (b.dataset.pid) { const p = PEOPLE.find(x => x.id === b.dataset.pid); return answer(card, {action: 'confirm', person_id: b.dataset.pid}, `Saved: ${p.name}`); }
     if (b.dataset.a === 'skip') return answer(card, {action: 'skip'}, 'Skipped');
     if (b.dataset.a === 'not') return answer(card, {action: 'not_person'}, 'Marked as not a person');
@@ -731,12 +783,12 @@ async function films(_, params) {
   const [list, ts, ps] = await Promise.all([api('/api/films'), api('/api/templates'), api('/api/persons')]);
   const idea = params.get('idea');
   const me = ps.find(p => p.owner), other = ps.find(p => !p.owner);
-  const preset = params.get('req') || (idea === 'birthday' && other ? `A 60-second birthday film for ${other.name}, warm and a little funny, ending with everyone together.`
-    : idea === 'together' && me && other ? `A one-minute film about ${me.name} and ${other.name} together, from the first picture to the last.`
+  const preset = params.get('req') || (idea === 'birthday' && other ? `A 60-second birthday film for ${en(other)}, warm and a little funny, ending with everyone together.`
+    : idea === 'together' && me && other ? `A one-minute film about ${en(me)} and ${en(other)} together, from the first picture to the last.`
     : idea === 'year' && OV?.years ? `A one-minute film of my year ${OV.years[1]}, in the order it happened.` : '');
   const quick = [
-    ...ps.filter(p => !p.owner).slice(0, 3).map(p => [`Birthday: ${p.name}`, `A 60-second birthday film for ${p.name}, warm and a little funny, ending with everyone together.`]),
-    me ? [`My story`, `A 90-second film of ${me.name}'s life so far, from childhood to today.`] : null,
+    ...ps.filter(p => !p.owner).slice(0, 3).map(p => [`Birthday: ${p.name}`, `A 60-second birthday film for ${en(p)}, warm and a little funny, ending with everyone together.`]),
+    me ? [`My story`, `A 90-second film of ${en(me)}'s life so far, from childhood to today.`] : null,
   ].filter(Boolean);
   return `<div class="phead"><div><div class="eyebrow">Films</div><h1>Tell the crew what to make</h1>
       <p>A producer, a screenwriter, a picture checker, an editor, a narrator, a composer and a critic — all Muse — make a first cut,
@@ -905,6 +957,7 @@ async function openViewer(mid) {
     const pb = e.target.closest('[data-person]'); if (pb) { location.hash = `#/person/${enc(pb.dataset.person)}`; return; }
     const fb = e.target.closest('[data-face]');
     if (fb) {
+      if (OV && OV.site) return toast("A demo: names can't be changed in this family's graph");
       const name = prompt('Who is this?');
       if (name && name.trim()) {
         const ppl = await api('/api/people');
