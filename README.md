@@ -50,7 +50,7 @@ owner's own photos only (added from a folder or a Facebook / Instagram export).
 | `mlg/graph/write.py` | Idempotent per-item sub-graph: MediaItem, Moment, Observations, Objects, Activities, Utterances, typed edges with evidence |
 
 ```powershell
-.\.venv\Scripts\python.exe -m mlg.ingest.scan data\demo
+.\.venv\Scripts\python.exe -m mlg.ingest.scan <your photo folder>
 .\.venv\Scripts\python.exe -m mlg.perceive.run --workers 6
 ```
 
