@@ -3,6 +3,7 @@
     .venv\\Scripts\\python.exe scripts\\build_site_bundle.py            # reduced media copies -> data/site_bundle
     .venv\\Scripts\\python.exe -m modal volume put mlg-site data\\site_bundle /
     .venv\\Scripts\\python.exe -m modal secret create mlg-env --from-dotenv .env
+    .venv\\Scripts\\python.exe -m modal secret create mlg-site-code MLG_SITE_CODE=<the access code>
     .venv\\Scripts\\python.exe -m modal deploy deploy\\modal_app.py
 
 Volumes: `mlg-site` holds the media copies (/site/media), the caches and films (/site/data);
@@ -21,6 +22,7 @@ app = modal.App(APP_NAME)
 site_vol = modal.Volume.from_name("mlg-site", create_if_missing=True)
 hf_vol = modal.Volume.from_name("mlg-hf", create_if_missing=True)
 env = modal.Secret.from_name("mlg-env")
+code = modal.Secret.from_name("mlg-site-code")   # MLG_SITE_CODE, the access code given to the judges
 
 web_image = (
     modal.Image.debian_slim(python_version="3.12")
@@ -62,7 +64,7 @@ def gpu_jobs(jobs: list[dict]) -> list[dict]:
     return out
 
 
-@app.function(image=web_image, volumes={"/site": site_vol}, secrets=[env], timeout=3600,
+@app.function(image=web_image, volumes={"/site": site_vol}, secrets=[env, code], timeout=3600,
               min_containers=1, max_containers=1, scaledown_window=1200)   # one container: films run in its threads
 @modal.concurrent(max_inputs=40)
 @modal.asgi_app()

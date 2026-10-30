@@ -283,7 +283,8 @@ def people_list() -> list[dict]:
                 years[pid].append(m["date"][:4])
     out = [{"id": pid, "name": p["name"], "relation": p.get("relation"), "owner": bool(p.get("owner")),
             "count": seen.get(pid, 0), "from": min(years[pid]) if years[pid] else None,
-            "to": max(years[pid]) if years[pid] else None} for pid, p in ppl.items()]
+            "to": max(years[pid]) if years[pid] else None} for pid, p in ppl.items()
+           if seen.get(pid) or p.get("owner")]   # people named elsewhere but not in any picture here stay out
     out.sort(key=lambda p: (not p["owner"], -p["count"], p["name"]))
     return out
 
@@ -320,7 +321,7 @@ def graph() -> dict:
     unknown = sum(len(m["unknown"]) for m in ms)
     keys = set(pics) | set(events)
     return {"nodes": [{"id": pid, "name": p["name"], "count": seen.get(pid, 0), "owner": bool(p.get("owner")),
-                       "relation": p.get("relation")} for pid, p in ppl.items()],
+                       "relation": p.get("relation")} for pid, p in ppl.items() if seen.get(pid)],
             "edges": [{"a": a, "b": b, "pics": pics.get((a, b), 0), "events": events.get((a, b), 0),
                        "w": pics.get((a, b), 0) + 0.5 * events.get((a, b), 0)} for a, b in keys],
             "unknown_faces": unknown}
@@ -364,7 +365,7 @@ def overview() -> dict:
     mems = memories()
     return {"owner": me["name"] if me else None, "owner_id": me["id"] if me else None,
             "photos": kinds.get("photo", 0), "videos": kinds.get("video", 0), "voice": kinds.get("audio", 0),
-            "people": len(ppl), "memories": len(mems), "years": [years[0], years[-1]] if years else None,
+            "people": sum(1 for pid in ppl if any(pid in m["people"] for m in ms)), "memories": len(mems), "years": [years[0], years[-1]] if years else None,
             "unknown_faces": sum(len(m["unknown"]) for m in ms),
             "on_this_day": on_this_day()[:6], "recent": mems[:8],
             "untitled": sum(1 for x in mems if x["id"] not in _titles())}
