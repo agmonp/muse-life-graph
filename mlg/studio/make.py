@@ -20,7 +20,7 @@ from typing import Callable
 from mlg.config import DATA
 from mlg.graph.db import session
 from mlg.people import roster
-from mlg.studio import ask, checker, critic, edit, render, sound
+from mlg.studio import ask, checker, critic, edit, render, sound, subtitles
 from mlg.studio.plan import plan
 
 FILMS = DATA / "films"
@@ -147,11 +147,19 @@ def make(request: str, dataset: str = "real", film_id: str | None = None,
 
         job.say("Picture Checker", "looking at every picture of every scene")
         notes = checker.check(sb)
+        by = sorted({v.get("served_by") for v in sb["picture_check"].values() if v.get("served_by")})
         job.state["picture_check"] = {k: {"note": v["note"], "verdicts": v["verdicts"],
-                                          "narration_fix": v.get("narration_fix") if not v["narration_ok"] else None}
+                                          "narration_fix": v.get("narration_fix") if not v["narration_ok"] else None,
+                                          "served_by": v.get("served_by")}
                                       for k, v in sb["picture_check"].items()}
-        job.say("Picture Checker", f"{len(notes)} changes" if notes else "every picture fits its scene",
-                "; ".join(notes))
+        job.say("Picture Checker", (f"{len(notes)} changes" if notes else "every picture fits its scene")
+                + (f" · served by {' + '.join(by)}" if by else ""), "; ".join(notes))
+        try:
+            if subs := subtitles.translate(sb):
+                job.say("Editor", f"English subtitles for {len(subs) - 1} lines said in another language",
+                        "; ".join(subs))
+        except Exception as e:  # noqa: BLE001 - a film with an untranslated line is still a film
+            job.say("Editor", "could not translate the spoken lines; they keep their own words", str(e)[:200])
         job.put("storyboard.json", sb)
 
         edl1 = edit.build(sb)
