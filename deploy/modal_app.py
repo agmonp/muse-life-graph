@@ -69,8 +69,9 @@ def gpu_jobs(jobs: list[dict]) -> list[dict]:
 
 
 if GPU:
+    # one A10G at most (~$1.10/h), gone 2 min after its last job: a film's score and narration cost cents
     gpu_jobs = app.function(image=gpu_image, gpu="A10G", volumes={"/hf": hf_vol}, timeout=1800,
-                            scaledown_window=300)(gpu_jobs)
+                            scaledown_window=120, max_containers=1)(gpu_jobs)
 
 
 @app.function(image=web_image, volumes={"/site": site_vol}, secrets=[env, code], timeout=3600,
