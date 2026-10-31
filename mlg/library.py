@@ -170,7 +170,7 @@ def memories() -> list[dict]:
         t = titles.get(key, {})
         out.append({"id": key, "title": t.get("title") or (g[0]["album"] if g[0]["album"] else None)
                     or (cover["event"] or "").capitalize() or "A moment",
-                    "line": t.get("line") or cover["summary"],
+                    "line": t.get("line") or cover["summary"], "titled_by": t.get("by"),
                     "date": g[0]["date"][:10], "end": g[-1]["date"][:10],
                     "precise": all(m["date_source"] in ("exif", "container", "filename", "recorded") for m in g),
                     "count": len(g),
@@ -237,11 +237,12 @@ def write_titles(force: bool = False) -> int:
             "(2-6 words, like a photo album page: 'Lia's 7th birthday', 'Summer at the beach') and one warm, "
             "concrete line (max 16 words) about what the photos show. Use people's names when given. "
             "Never invent facts that the photo descriptions do not support. English."),
-            schema=schema, schema_name="memory_titles", effort="low")
+            schema=schema, schema_name="memory_titles", effort="low", task="titles")
         sigs = {key: sig for key, sig, _ in batch}
         for t in ans.data.get("memories", []):
             if t.get("id") in sigs:
-                titles[t["id"]] = {"title": t["title"], "line": t["line"], "sig": sigs[t["id"]]}
+                titles[t["id"]] = {"title": t["title"].strip(), "line": t["line"].strip(), "sig": sigs[t["id"]],
+                                   "by": ans.provider}
         TITLES.parent.mkdir(parents=True, exist_ok=True)
         TITLES.write_text(json.dumps(titles, ensure_ascii=False, indent=1), encoding="utf-8")
     return len(todo)

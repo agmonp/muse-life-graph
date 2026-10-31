@@ -52,7 +52,7 @@ def _picture(m: dict) -> Path | None:
     return None
 
 
-def check_scene(sc: dict, ms: dict) -> dict:
+def check_scene(sc: dict, ms: dict, provider=None, use_cache: bool = True) -> dict:
     parts = [chat.text(f"SCENE {sc['order']} - purpose: {sc['intent']}\nNARRATION: {sc.get('narration') or '(none)'}")]
     shown = []
     for mid in sc["moment_ids"]:
@@ -67,8 +67,9 @@ def check_scene(sc: dict, ms: dict) -> dict:
     if not shown:
         return {"verdicts": [], "narration_ok": True, "narration_fix": None, "note": "no pictures to check"}
     ans = chat.ask(parts, system=SYSTEM, schema=SCHEMA, schema_name="picture_check", effort="medium",
-                   max_tokens=8000)
-    return ans.data
+                   max_tokens=8000, task="checker",
+                   provider=provider, use_cache=use_cache)
+    return {**ans.data, "served_by": ans.served_by, "_answer": ans}
 
 
 def check(storyboard: dict) -> list[str]:
@@ -80,6 +81,7 @@ def check(storyboard: dict) -> list[str]:
     storyboard["picture_check"] = {}
     notes = []
     for sc, res in zip(scenes, results):
+        res.pop("_answer", None)
         storyboard["picture_check"][str(sc["order"])] = res
         visual = [m for m in sc["moment_ids"] if ms[m]["kind"] in ("photo", "video")]
         dropped = [v for v in res["verdicts"] if not v["keep"] and v["moment_id"] in visual]

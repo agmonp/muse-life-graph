@@ -111,14 +111,16 @@ def _circle_names(circles: dict[int, list[str]], ms: list[dict], ppl: dict) -> d
                         "properties": {"circles": {"type": "array", "items": {
                             "type": "object", "additionalProperties": False, "required": ["key", "name"],
                             "properties": {"key": {"type": "string"}, "name": {"type": "string"}}}}}},
-                schema_name="circle_names", effort="low")
+                schema_name="circle_names", effort="low", task="circles")
             for c in (ans.data or {}).get("circles", []):
                 if c.get("key") in todo and c.get("name"):
                     cache[c["key"]] = c["name"].strip()[:40]
+            cache["_by"] = ans.provider
             NAMES.parent.mkdir(parents=True, exist_ok=True)
             NAMES.write_text(json.dumps(cache, ensure_ascii=False, indent=1), encoding="utf-8")
         except Exception as e:  # noqa: BLE001 - unnamed circles get a plain name
             print("circle names:", e)
+    _CACHE["names_by"] = cache.get("_by")
     return {cid: cache.get(sig, f"Circle {i + 1}") for i, (cid, (sig, _)) in enumerate(circles.items())}
 
 
@@ -281,7 +283,7 @@ def build() -> dict:
         "bridges": [{"id": p, "name": ppl[p]["name"], "score": round(b, 3),
                      "joins": sorted({label[n] for n in bb.neighbors(p)} - {label[p]})[:3]} for p, b in bridges],
         "stats": {"people": len(people), "ties": g.number_of_edges(), "backbone": bb.number_of_edges(),
-                  "circles": len(circles),
+                  "circles": len(circles), "circles_named_by": _CACHE.get("names_by"),
                   "modularity": round(nx.community.modularity(g, comms, weight="w"), 3) if g.number_of_edges() else 0},
     }
     _CACHE.update(key=key, data=data)

@@ -199,3 +199,23 @@ def test_filename_dates(name, expected):
 
 def test_no_date_in_plain_name():
     assert dates.filename_date(Path("IMG_1234.jpg")) is None
+
+
+def test_spark_open_switch(monkeypatch):
+    """Listed tasks go to Muse Spark Open on Baseten when a key is set; everything else stays on the API."""
+    from mlg import config
+    from mlg.muse import chat
+    monkeypatch.setenv("BASETEN_API_KEY", "x")
+    monkeypatch.setenv("MLG_SPARK_OPEN", "default")
+    config.settings.cache_clear()
+    try:
+        assert chat.provider_for("search").name == "baseten"
+        assert chat.provider_for("perceive").name == "meta"
+        assert chat.provider_for(None).name == "meta"
+        monkeypatch.setenv("MLG_SPARK_OPEN", "none")
+        assert chat.provider_for("search").name == "meta"
+        monkeypatch.setenv("MLG_SPARK_OPEN", "titles")
+        assert chat.provider_for("titles").name == "baseten" and chat.provider_for("search").name == "meta"
+        assert chat.Answer("x", provider="baseten").served_by == "Muse Spark Open on Baseten"
+    finally:
+        config.settings.cache_clear()

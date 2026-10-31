@@ -38,18 +38,20 @@ class Reply:
     seconds: float
 
 
-def _log_usage(path: str, model: str | None, body: Any, seconds: float) -> None:
+def _log_usage(path: str, model: str | None, body: Any, seconds: float, extra: dict | None = None) -> None:
     usage = body.get("usage") if isinstance(body, dict) else None
     USAGE_LOG.parent.mkdir(parents=True, exist_ok=True)
     with USAGE_LOG.open("a", encoding="utf-8") as f:
         f.write(json.dumps({"t": time.time(), "path": path, "model": model,
-                            "seconds": round(seconds, 2), "usage": usage}) + "\n")
+                            "seconds": round(seconds, 2), "usage": usage, **(extra or {})}) + "\n")
 
 
 class MetaHTTP:
-    def __init__(self, base_url: str | None = None, api_key: str | None = None, timeout: float = 600):
+    def __init__(self, base_url: str | None = None, api_key: str | None = None, timeout: float = 600,
+                 provider: str = "meta"):
         s = settings()
         self.base_url = (base_url or s.base_url).rstrip("/")
+        self.provider = provider          # written to the usage log next to the model
         self._key = api_key
         self.timeout = timeout
 
@@ -59,7 +61,7 @@ class MetaHTTP:
 
     def request(self, method: str, path: str, *, json_body: dict | None = None,
                 files: dict | None = None, data: dict | None = None,
-                accept: str = "application/json") -> Reply:
+                accept: str = "application/json", log: dict | None = None) -> Reply:
         url = f"{self.base_url}{path}"
         model = (json_body or {}).get("model")
         delay = 0.5
@@ -81,7 +83,7 @@ class MetaHTTP:
             except ValueError:
                 body = r.text
             if r.status_code < 400:
-                _log_usage(path, model, body, seconds)
+                _log_usage(path, model, body, seconds, {"provider": self.provider, **(log or {})})
                 return Reply(r.status_code, body, r.headers, seconds)
             if r.status_code in RETRY_STATUS and attempt < MAX_TRIES:
                 wait = r.headers.get("Retry-After")
@@ -91,5 +93,5 @@ class MetaHTTP:
             raise MuseError(r.status_code, body, path)
         raise AssertionError("unreachable")
 
-    def post(self, path: str, body: dict) -> Reply:
-        return self.request("POST", path, json_body=body)
+    def post(self, path: str, body: dict, log: dict | None = None) -> Reply:
+        return self.request("POST", path, json_body=body, log=log)

@@ -66,7 +66,7 @@ def _index():
         return con, ms, ppl
 
 
-def understand(q: str) -> dict:
+def understand(q: str, provider=None, use_cache: bool = True) -> dict:
     _, ppl = library.data()
     roster = [{"id": pid, "name": p["name"], "relation": p.get("relation"), "owner": bool(p.get("owner"))}
               for pid, p in ppl.items()]
@@ -77,8 +77,11 @@ def understand(q: str) -> dict:
         "Years only when the question gives a time ('in 2012', 'as a child' -> leave null unless a birth year "
         "is known). kinds only when asked ('videos'). words: English words for what should be seen or said, "
         "with 2-4 close synonyms each (beach -> sea, sand, shore); leave out names and dates."),
-        schema=QUERY_SCHEMA, schema_name="search_query", effort="low")
+        schema=QUERY_SCHEMA, schema_name="search_query", effort="low", task="search",
+        provider=provider, use_cache=use_cache)
     d = ans.data
+    d["_answer"] = ans
+    d["served_by"] = ans.served_by
     d["people"] = [p for p in d.get("people", []) if p in ppl]
     return d
 
@@ -123,7 +126,7 @@ def search(q: str, limit: int = 60) -> dict:
     out.sort(key=lambda c: (-c["score"], c["date"]))
     return {"q": q, "understood": {"people": [ppl[p]["name"] for p in u["people"]], "years":
                                    [u["year_from"], u["year_to"]], "kinds": u["kinds"], "words": u["words"]},
-            "relaxed": relaxed, "total": len(out), "results": out[:limit]}
+            "relaxed": relaxed, "total": len(out), "results": out[:limit], "served_by": {"understood": u["served_by"]}}
 
 
 def _filter(ms, ppl, u, scores, why, strict_people: bool) -> list[dict]:
@@ -171,8 +174,10 @@ def ask(q: str) -> dict:
         "You answer the owner's question about their own life using ONLY the moments given (each is a real "
         "photo, video or voice note, described by what was seen and said). Cite moments as [n]. Say plainly "
         "what the moments do not show. Dates estimated from content are approximate - say 'around'. "
-        "Never guess what people felt beyond what was seen. Answer in the question's language."),
-        schema=ANSWER_SCHEMA, schema_name="answer", effort="low")
+        "Never guess what people felt beyond what was seen. Answer in the question's language, in 2-5 short "
+        "sentences of plain prose: no lists, no line breaks, no notes on how a date was found."),
+        schema=ANSWER_SCHEMA, schema_name="answer", effort="low", task="search")
     cited = [n for n in ans.data.get("cited", []) if 1 <= n <= len(found["results"])]
+    found["served_by"]["answer"] = ans.served_by
     return {**found, "answer": ans.data.get("answer"), "unsure": ans.data.get("unsure", False),
             "cited": [found["results"][n - 1]["id"] for n in cited]}

@@ -426,12 +426,15 @@ async function memories(_, params) {
       ${years.map(v => `<a class="chip ${v === y ? 'on' : ''}" href="#/memories?year=${v}">${v}</a>`).join('')}</div>
     ${shown.length ? `<div class="mgrid">${shown.map(memCard).join('')}</div>` : '<div class="empty">No memories yet.</div>'}`;
 }
+function servedBy(p, verb) {
+  return p === 'baseten' ? `<div class="served">${ic('sparkle')}${verb} by Muse Spark Open on Baseten (Meta open weights)</div>` : '';
+}
 async function memory(key) {
   const m = await api(`/api/memory/${enc(key)}`);
   const people = m.people.map(p => `<a class="chip" href="#/person/${enc(p.id)}">${avatar(p)}${esc(p.name)}</a>`).join('');
   return `<a class="back" href="#/memories">${ic('back')}Memories</a>
     <div class="phead"><div><div class="eyebrow">${esc(memWhen(m))}${m.place ? ` · ${esc(m.place)}` : ''}</div>
-      <h1 dir="auto">${esc(m.title)}</h1><p dir="auto">${esc(m.line || '')}</p>
+      <h1 dir="auto">${esc(m.title)}</h1><p dir="auto">${esc(m.line || '')}</p>${servedBy(m.titled_by, 'Titled')}
       <div class="chips" style="margin-top:14px">${people}${m.mood.map(x => `<span class="chip accent">${esc(x)}</span>`).join('')}</div></div>
       <button class="btn primary" id="memfilm" data-title="${esc(m.title)}" data-when="${esc(memWhen(m))}">${ic('film')}Make a film from this</button></div>
     ${photosHtml(m.moments)}`;
@@ -577,7 +580,7 @@ afterRender.connections = async (_, params) => {
   const gv = $('#gv');
   const apply = () => { gv.setAttribute('transform', `translate(${view.x},${view.y}) scale(${view.k})`); svg.classList.toggle('zoomed', view.k > 1.15 * Math.min(W / (X1 - X0), H / (Y1 - Y0))); };
   apply();
-  $('#glegend').innerHTML = `<span>${g.stats.people} people · ${g.stats.backbone} strong ties of ${g.stats.ties} · ${g.stats.circles} circles</span>
+  $('#glegend').innerHTML = `<span>${g.stats.people} people · ${g.stats.backbone} strong ties of ${g.stats.ties} · ${g.stats.circles} circles</span>${g.stats.circles_named_by === 'baseten' ? '<span>circles named by Muse Spark Open on Baseten</span>' : ''}
     <span title="Ties are normalised for how often each person appears; the disparity filter (Serrano et al. 2009) keeps the significant ones; circles by your Life Graph groups and Louvain communities (modularity ${g.stats.modularity}); dashed rings mark bridges (betweenness).">ⓘ how</span>`;
   $('#gme').onchange = e => { $('.owner-edges', svg).style.display = e.target.checked ? '' : 'none'; };
 
@@ -741,10 +744,11 @@ async function searchPage(_, params) {
     ...u.kinds.map(k => `<span class="chip">${esc(k)}s</span>`), ...u.words.slice(0, 6).map(w => `<span class="chip accent">${esc(w)}</span>`)].join('');
   const ans = isQ && r.answer ? `<div class="answer fade-in"><div class="eyebrow" style="color:var(--plum)">${ic('sparkle')} Muse answers from your pictures</div>
       <p dir="auto">${esc(r.answer).replace(/\[(\d+)\]/g, (m, n) => r.results[n - 1] ? `<sup><a href="#" data-cite="${esc(r.results[n - 1].id)}">${n}</a></sup>` : '')}</p>
-      ${r.unsure ? '<div class="small muted" style="margin-top:8px">Your pictures don\'t fully answer this — here is what comes closest.</div>' : ''}</div>` : '';
+      ${r.unsure ? '<div class="small muted" style="margin-top:8px">Your pictures don\'t fully answer this — here is what comes closest.</div>' : ''}
+      ${r.served_by?.answer ? `<div class="served">${ic('sparkle')}Answered by ${esc(r.served_by.answer)}</div>` : ''}</div>` : '';
   return `<div class="phead"><div><div class="eyebrow">${isQ ? 'Question' : 'Search'}</div><h1 dir="auto">${esc(q)}</h1></div></div>
     ${ans}
-    <div class="understood">Muse understood: ${chips || '<span>everything</span>'} <span>· ${r.total} found</span></div>
+    <div class="understood">Muse understood: ${chips || '<span>everything</span>'} <span>· ${r.total} found</span>${r.served_by?.understood ? `<span class="served">· read by ${esc(r.served_by.understood)}</span>` : ''}</div>
     ${r.relaxed ? `<p class="small muted">No picture is linked to ${esc(u.people.join(' & '))} for this yet, so these are the closest matches without the name. <a href="#/faces">Naming faces</a> fixes that.</p>` : ''}
     ${r.results.length ? photosHtml(r.results, {why: true}) : `<div class="empty"><h2>Nothing found</h2><p>Try other words, a name, or a year.</p></div>`}`;
 }
@@ -988,7 +992,7 @@ function questionsHtml(st) {
 function scenesHtml(st) {
   if (!st.scenes) return '';
   const pc = st.picture_check || {};
-  return `<div class="card pad"><h3>Scenes</h3><div class="small muted" style="margin-bottom:12px">✕ = taken out by the picture checker (hover for why)</div><div class="scenes">${st.scenes.map(sc => {
+  return `<div class="card pad"><h3>Scenes</h3><div class="small muted" style="margin-bottom:12px">✕ = taken out by the picture checker (hover for why)${(() => { const by = [...new Set(Object.values(pc).map(x => x.served_by).filter(Boolean))]; return by.length ? ` · checked by ${esc(by.join(' + '))}` : ''; })()}</div><div class="scenes">${st.scenes.map(sc => {
     const chk = pc[String(sc.order)] || {verdicts: []}, v = Object.fromEntries(chk.verdicts.map(x => [x.moment_id, x]));
     return `<div class="scene"><div class="tiny faint">${sc.order}${sc.beat ? ` · ${esc(sc.beat.replace(/_/g, ' '))}` : ''} · ${esc(sc.emotion || '')}</div>
       <div class="thumbs">${sc.moments.map(m => `<div class="${v[m] && !v[m].keep ? 'out' : ''}" title="${esc(v[m]?.reason || '')}"><img src="${photo(m.split(':')[0])}" alt="" loading="lazy"></div>`).join('')}</div>
