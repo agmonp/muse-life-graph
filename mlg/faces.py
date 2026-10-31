@@ -182,20 +182,11 @@ def _best_person(v: np.ndarray, people: dict[str, np.ndarray]) -> tuple[str | No
     return best, sim
 
 
-def groups(skip: set[str] | None = None) -> dict:
-    """Unnamed faces as groups of (probably) one person each, largest first; faces with no fingerprint last."""
-    skip = skip or set()
-    con = _con()
-    obs = _observations()
-    open_ = [o for o in obs if not o["person"] and not o["action"] and o["id"] not in skip]
-    vecs = _vectors(con, [o["id"] for o in open_])
-    known = {k for (k,) in con.execute("SELECT key FROM vec")}
-    people = _people_vectors(con, obs)
-    with_v = [o for o in open_ if o["id"] in vecs]
-    # leader clustering: each face joins the closest group when it is close enough, else starts one
+def cluster(obs: list[dict], vecs: dict[str, np.ndarray]) -> tuple[list[np.ndarray], list[list[dict]]]:
+    """Leader clustering: each face joins the closest group when it is close enough, else starts one."""
     cents: list[np.ndarray] = []
     members: list[list[dict]] = []
-    for o in sorted(with_v, key=lambda o: o["id"]):
+    for o in sorted(obs, key=lambda o: o["id"]):
         v = vecs[o["id"]]
         if cents:
             sims = np.stack(cents) @ v
@@ -207,6 +198,20 @@ def groups(skip: set[str] | None = None) -> dict:
                 continue
         cents.append(v.copy())
         members.append([o])
+    return cents, members
+
+
+def groups(skip: set[str] | None = None) -> dict:
+    """Unnamed faces as groups of (probably) one person each, largest first; faces with no fingerprint last."""
+    skip = skip or set()
+    con = _con()
+    obs = _observations()
+    open_ = [o for o in obs if not o["person"] and not o["action"] and o["id"] not in skip]
+    vecs = _vectors(con, [o["id"] for o in open_])
+    known = {k for (k,) in con.execute("SELECT key FROM vec")}
+    people = _people_vectors(con, obs)
+    with_v = [o for o in open_ if o["id"] in vecs]
+    cents, members = cluster(with_v, vecs)
     from mlg import library
     _, ppl = library.data()
     out = []

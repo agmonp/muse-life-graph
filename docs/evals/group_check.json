@@ -1,0 +1,21 @@
+{
+ "checked_by": "the coding agent (Claude), by eye on 160 px person crops, not the owner",
+ "date": "2026-10-31",
+ "sample": 12,
+ "how": "scripts/evals.py --sheets: 12 random open groups with 3+ faces (seed 11), up to 8 faces each",
+ "note": "The mixed ones are mostly small or dark faces, and one 136-face group is a catch-all of hands, backs and blurred crops where no face is really visible. A face crop is small, so some 'mixed' calls may be wrong either way; the owner has not checked these.",
+ "groups": [
+  {"sheet": "group_00_8faces", "verdict": "mixed"},
+  {"sheet": "group_01_6faces", "verdict": "one person"},
+  {"sheet": "group_02_4faces", "verdict": "one person"},
+  {"sheet": "group_03_3faces", "verdict": "mixed"},
+  {"sheet": "group_04_3faces", "verdict": "one person"},
+  {"sheet": "group_05_4faces", "verdict": "mixed"},
+  {"sheet": "group_06_4faces", "verdict": "mixed"},
+  {"sheet": "group_07_3faces", "verdict": "unsure"},
+  {"sheet": "group_08_6faces", "verdict": "one person"},
+  {"sheet": "group_09_4faces", "verdict": "mixed"},
+  {"sheet": "group_10_136faces", "verdict": "mixed"},
+  {"sheet": "group_11_14faces", "verdict": "mixed"}
+ ]
+}
