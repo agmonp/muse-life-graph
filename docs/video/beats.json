@@ -1,0 +1,24 @@
+{
+ "bed": "taya_v2.mp4",
+ "beats": [
+  {"screen": "taya_v2.mp4", "in": 6, "dur": 12, "sound": "film", "caption": "Made by an AI film crew from one sentence"},
+  {"camera": "Like every parent, I have twenty thousand photos on my phone and my Facebook, and I never look at them. Half the faces in the old ones, I can't even name anymore. The memories are there. Nobody can find them, and nobody has time to make anything from them.", "dur": 15},
+  {"screen": "timeline.mp4", "in": 3, "dur": 4, "bed_in": 0, "caption": "One family: 3,648 photos · 69 videos · 1975–2026"},
+  {"screen": "faces.mp4", "in": 2, "dur": 4, "bed_in": 4, "caption": "Thousands of faces nobody has named"},
+  {"screen": "add.mp4", "in": 3, "dur": 8, "bed_in": 8, "caption": "23,742 files fingerprinted · 3,393 copies set aside, 3,029 of them re-encodes"},
+  {"screen": "dated.mp4", "in": 2.5, "dur": 8, "bed_in": 16, "crop": "1480:832:440:0", "caption": "No date on a scan? Muse Spark reads the picture and says why"},
+  {"screen": "faces.mp4", "in": 10, "dur": 7, "bed_in": 24, "caption": "Two keys before a name: a face fingerprint and a second witness"},
+  {"screen": "connections.mp4", "in": 9, "dur": 7, "bed_in": 31, "caption": "Circles of a life, year by year · named by Muse Spark Open"},
+  {"camera": "Then I ask for a film, in one sentence. And a crew of Muse agents makes it, and then watches it, and fixes it.", "dur": 10},
+  {"screen": "make.mp4", "in": 1, "dur": 10, "sound": "none", "caption": "One sentence → Producer (Muse Spark) → Screenwriter (Muse Wonder)"},
+  {"screen": "make.mp4", "in": 52, "dur": 13, "sound": "none", "caption": "It stops to ask what only you know"},
+  {"screen": "crew.mp4", "in": 14, "dur": 10, "sound": "none", "crop": "1440:810:400:100", "caption": "The Picture Checker looks at every picture · Muse Spark Open on Baseten"},
+  {"screen": "film.mp4", "in": 3, "dur": 14, "sound": "none", "caption": "Muse Wonder watches the draft video and puts its notes on the timeline"},
+  {"screen": "home.mp4", "in": 4, "dur": 8, "sound": "none", "caption": "Blind test over all 8 films, both orders: the re-cut won 12 of 16"},
+  {"screen": "search.mp4", "in": 13, "dur": 5, "sound": "none", "caption": "Ask in any language, answered from your pictures on Meta open weights"},
+  {"screen": "taya_v2.mp4", "in": 48, "dur": 25, "sound": "film"},
+  {"camera": "That's the moment I'd never have found in twenty thousand photos.", "dur": 5},
+  {"screen": "stack_card.png", "dur": 7, "sound": "none"},
+  {"camera": "It's all Meta's models, including Muse Spark Open running on open weights. I built it in ten days. And it runs on your own computer: your family's photos never have to leave home.", "dur": 8}
+ ]
+}

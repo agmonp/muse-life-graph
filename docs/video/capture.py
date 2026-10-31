@@ -25,6 +25,7 @@ HERO = "film_20261030_171616"          # "Taya Growing Up", English subtitles, v
 SCAN = "360bdd0d361e337a7967b3b8129f71b0a7c8c7596cd673f63b76cfc9f2a943f9:moment"   # a 1970s scan Muse dated
 REQUEST = "A one-minute film of Taya growing up, from a baby to her last birthday, warm and simple."
 QUESTION = "When did we go to the beach with the kids?"
+NEW = "film_20261031_175659"            # the film `--make` recorded on 2026-10-31
 
 
 def slow_scroll(page: Page, px: int, seconds: float, steps: int = 60) -> None:
@@ -108,6 +109,25 @@ def film(page: Page, base: str) -> None:
     time.sleep(2)
 
 
+def crew(page: Page, base: str) -> None:
+    """The film recorded by `make`, finished: the Picture Checker's verdicts on the scenes, then the crew log."""
+    go(page, base, f"/film/{NEW}", 3)
+    page.locator("#fscenes").scroll_into_view_if_needed()
+    time.sleep(1)
+    out = page.locator("#fscenes .thumbs .out").first
+    if out.count():
+        out.hover()
+    time.sleep(6)
+    page.locator("#fcrew").scroll_into_view_if_needed()
+    time.sleep(1)
+    page.evaluate("document.querySelector('.crew').scrollTop = 0")
+    time.sleep(2)
+    for _ in range(8):
+        page.evaluate("document.querySelector('.crew').scrollBy(0, 70)")
+        time.sleep(1)
+    time.sleep(2)
+
+
 def home(page: Page, base: str) -> None:
     go(page, base, "", 3)
     page.evaluate("document.querySelector('video')?.play()")
@@ -139,14 +159,14 @@ def make(page: Page, base: str) -> None:
                 time.sleep(2.5)
             answered = True
         state = page.locator("#fhead .eyebrow").inner_text() if page.locator("#fhead .eyebrow").count() else ""
-        if state in ("Ready", "Failed", "Stopped"):
+        if state.strip().lower() in ("ready", "failed", "stopped"):   # the label is shown in capitals
             break
     page.locator("#fversions").scroll_into_view_if_needed()
     time.sleep(5)
 
 
 SHOTS = {"home": home, "timeline": timeline, "faces": faces, "add": add, "dated": dated,
-         "connections": connections, "search": search, "film": film, "make": make}
+         "connections": connections, "search": search, "film": film, "crew": crew, "make": make}
 
 
 def to_mp4(webm: Path) -> Path:

@@ -21,7 +21,8 @@ SYSTEM = (
     "blurred or eyes closed on the key face, a near-duplicate of another picture in the scene). For "
     "each kept picture name the person the camera should frame (an id from its people list) - the one "
     "the narration is about. If the narration states something the pictures contradict or don't show, "
-    "rewrite it (same language, at most 14 words, concrete, no invented facts); otherwise keep it.")
+    "rewrite it (same language, at most 14 words, concrete, no invented facts); otherwise keep it. "
+    "In `reason` and `note` call people by their names, never by their ids - the owner reads them.")
 
 SCHEMA = {
     "type": "object", "additionalProperties": False,

@@ -3,7 +3,8 @@
     .venv\\Scripts\\python.exe docs\\video\\assemble.py [--beats docs/video/beats.json] [--out data/video/draft.mp4]
 
 beats.json is the timeline (see SCRIPT.md): each beat is either
-  {"screen": "<capture or clip file>", "in": 0.0, "dur": 8.0, "caption": "...", "sound": "film" | "bed" | "none"}
+  {"screen": "<capture or clip file>", "in": 0.0, "dur": 8.0, "caption": "...", "sound": "film" | "bed" | "none",
+   "crop": "w:h:x:y" (optional zoom into the capture)}
 or an on-camera gap
   {"camera": "<the line you say>", "dur": 15.0}
 Screen beats are scaled to 1920x1080 at 30 fps and get a caption (lower third); camera beats are black with the
@@ -49,7 +50,8 @@ def caption_filter(text: str | None, dur: float) -> str:
 def screen(beat: dict, media: Path, bed: Path | None, out: Path) -> None:
     src = media / beat["screen"]
     dur = float(beat["dur"])
-    vf = (f"scale={W}:{H}:force_original_aspect_ratio=decrease,pad={W}:{H}:(ow-iw)/2:(oh-ih)/2:color=black,"
+    crop = f"crop={beat['crop']}," if beat.get("crop") else ""      # "w:h:x:y" of the 1920x1080 capture: a zoom
+    vf = (f"{crop}scale={W}:{H}:force_original_aspect_ratio=decrease,pad={W}:{H}:(ow-iw)/2:(oh-ih)/2:color=black,"
           f"fps={FPS},format=yuv420p" + caption_filter(beat.get("caption"), dur))
     is_image = src.suffix.lower() in (".png", ".jpg", ".jpeg")
     inp = (["-loop", "1", "-t", f"{dur}", "-i", str(src)] if is_image
