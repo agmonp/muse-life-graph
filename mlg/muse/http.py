@@ -48,12 +48,13 @@ def _log_usage(path: str, model: str | None, body: Any, seconds: float, extra: d
 
 class MetaHTTP:
     def __init__(self, base_url: str | None = None, api_key: str | None = None, timeout: float = 600,
-                 provider: str = "meta"):
+                 provider: str = "meta", tries: int = MAX_TRIES):
         s = settings()
         self.base_url = (base_url or s.base_url).rstrip("/")
         self.provider = provider          # written to the usage log next to the model
         self._key = api_key
         self.timeout = timeout
+        self.tries = tries
 
     def _headers(self, accept: str = "application/json") -> dict[str, str]:
         key = self._key or settings().require_key()
@@ -65,14 +66,14 @@ class MetaHTTP:
         url = f"{self.base_url}{path}"
         model = (json_body or {}).get("model")
         delay = 0.5
-        for attempt in range(1, MAX_TRIES + 1):
+        for attempt in range(1, self.tries + 1):
             t0 = time.perf_counter()
             try:
                 with httpx.Client(timeout=self.timeout) as c:
                     r = c.request(method, url, headers=self._headers(accept),
                                   json=json_body, files=files, data=data)
             except (httpx.ConnectError, httpx.ReadTimeout, httpx.RemoteProtocolError):
-                if attempt == MAX_TRIES:
+                if attempt == self.tries:
                     raise
                 time.sleep(delay + random.random() * delay)
                 delay *= 2
@@ -85,7 +86,7 @@ class MetaHTTP:
             if r.status_code < 400:
                 _log_usage(path, model, body, seconds, {"provider": self.provider, **(log or {})})
                 return Reply(r.status_code, body, r.headers, seconds)
-            if r.status_code in RETRY_STATUS and attempt < MAX_TRIES:
+            if r.status_code in RETRY_STATUS and attempt < self.tries:
                 wait = r.headers.get("Retry-After")
                 time.sleep(float(wait) if wait else delay + random.random() * delay)
                 delay *= 2

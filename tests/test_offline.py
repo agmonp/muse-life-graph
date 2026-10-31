@@ -217,5 +217,6 @@ def test_spark_open_switch(monkeypatch):
         monkeypatch.setenv("MLG_SPARK_OPEN", "titles")
         assert chat.provider_for("titles").name == "baseten" and chat.provider_for("search").name == "meta"
         assert chat.Answer("x", provider="baseten").served_by == "Muse Spark Open on Baseten"
+        assert chat.Provider.baseten().http.timeout <= 120 and chat.Provider.baseten().http.tries == 1
     finally:
         config.settings.cache_clear()

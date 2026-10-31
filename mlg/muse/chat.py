@@ -90,13 +90,17 @@ class Provider:
         s = settings()
         if not s.baseten_key:
             raise RuntimeError("BASETEN_API_KEY is empty")
-        return cls("baseten", MetaHTTP(s.baseten_url, s.baseten_key, provider="baseten"), s.baseten_model)
+        # Spark Open on Baseten sometimes takes minutes on pictures (measured: 4 of 15 scenes over 3 min);
+        # a short leash and the API fallback (instead of a second try) keep a film moving
+        return cls("baseten", MetaHTTP(s.baseten_url, s.baseten_key, timeout=OPEN_TIMEOUT, provider="baseten",
+                                       tries=1), s.baseten_model)
 
 
 # Work that runs on Muse Spark Open (Meta's open weights, served by Baseten) when a Baseten key is set.
 # MLG_SPARK_OPEN lists the tasks ("all", "none", or e.g. "search,titles"); anything else stays on the
 # Muse Spark API. A failed Spark Open call falls back to the API, and the log says so.
 OPEN_TASKS = {"search", "titles", "circles", "checker"}
+OPEN_TIMEOUT = float(os.environ.get("MLG_SPARK_OPEN_TIMEOUT", "60"))
 SERVED_BY = {"baseten": "Muse Spark Open on Baseten", "meta": "Muse Spark (Meta Model API)"}
 
 
