@@ -69,7 +69,17 @@ def check_scene(sc: dict, ms: dict, provider=None, use_cache: bool = True) -> di
     ans = chat.ask(parts, system=SYSTEM, schema=SCHEMA, schema_name="picture_check", effort="medium",
                    max_tokens=8000, task="checker",
                    provider=provider, use_cache=use_cache)
+    # the models drop the ':moment' end of the ids they were shown; map every verdict back to a shown id
+    for v in ans.data.get("verdicts", []):
+        v["moment_id"] = _match_id(v.get("moment_id") or "", shown)
     return {**ans.data, "served_by": ans.served_by, "_answer": ans}
+
+
+def _match_id(mid: str, shown: list[str]) -> str:
+    if mid in shown:
+        return mid
+    base = mid.split(":")[0]
+    return next((s for s in shown if s.split(":")[0] == base), mid)
 
 
 def check(storyboard: dict) -> list[str]:

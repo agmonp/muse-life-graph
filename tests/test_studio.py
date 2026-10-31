@@ -254,3 +254,12 @@ def test_a_film_keeps_one_of_near_identical_pictures():
     assert script["scenes"][2]["moment_ids"] == ["p4"] or script["scenes"][2]["moment_ids"] == ["p2"]
     assert script["scenes"][1]["moment_ids"] == ["p3"]          # a scene never loses its only picture
     assert notes
+
+
+def test_checker_matches_ids_without_their_end():
+    """Muse answers with '<sha>' for a picture shown as '<sha>:moment'; the verdict must still land on it."""
+    from mlg.studio.checker import _match_id
+    shown = ["abc:moment", "def:moment"]
+    assert _match_id("abc", shown) == "abc:moment"
+    assert _match_id("def:moment", shown) == "def:moment"
+    assert _match_id("zzz", shown) == "zzz"
