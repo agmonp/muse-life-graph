@@ -330,7 +330,8 @@ function greeting() {
 }
 async function home(_, params) {
   const o = OV;
-  const layout = params?.get('home') || '';   // a / b: home layouts being compared
+  const pick = params?.get('home');   // b (the film behind the promise) by default; a = no film behind it; old = before 2026-11-01
+  const layout = pick === 'old' ? '' : pick || 'b';
   const [feat, fg] = await Promise.all([api('/api/featured').catch(() => ({film: null})),
                                         api('/api/face_groups?limit=5&per=1').catch(() => ({groups: [], open: 0}))]);
   const f = feat.film;
