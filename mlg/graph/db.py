@@ -25,15 +25,18 @@ def driver() -> Driver:
     s = settings()
     if not s.neo4j_uri:
         raise RuntimeError("NEO4J_URI is empty - put your AuraDB (or local) URI in .env")
-    scheme, rest = s.neo4j_uri.split("://", 1)
+    return connect(s.neo4j_uri, s.neo4j_user, s.neo4j_password)
+
+
+def connect(uri: str, user: str, password: str) -> Driver:
+    scheme, rest = uri.split("://", 1)
     if scheme.endswith("+s"):
         # Windows' local root store may lack the CA AuraDB uses (SSL.com), so verify
         # against certifi's bundle instead of the "+s" scheme's system default.
-        return GraphDatabase.driver(f"{scheme[:-2]}://{rest}", auth=(s.neo4j_user, s.neo4j_password),
+        return GraphDatabase.driver(f"{scheme[:-2]}://{rest}", auth=(user, password),
                                     encrypted=True, trusted_certificates=TrustCustomCAs(certifi.where()),
                                     notifications_min_severity="OFF", **KEEP_ALIVE)
-    return GraphDatabase.driver(s.neo4j_uri, auth=(s.neo4j_user, s.neo4j_password),
-                                notifications_min_severity="OFF", **KEEP_ALIVE)
+    return GraphDatabase.driver(uri, auth=(user, password), notifications_min_severity="OFF", **KEEP_ALIVE)
 
 
 # AuraDB drops connections that sit idle (a film can take ten minutes between two writes): test a pooled

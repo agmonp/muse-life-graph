@@ -19,7 +19,7 @@ from fastapi.responses import FileResponse, Response
 from pydantic import BaseModel
 
 from mlg import identity, people, site
-from mlg.config import CACHE
+from mlg.config import CACHE, DESKTOP, settings
 from mlg.graph.db import session
 from mlg.ingest.scan import connect
 from mlg.muse.media import open_image
@@ -77,9 +77,19 @@ CODE_PAGE = """<!doctype html><html lang="en"><meta charset="utf-8"><meta name="
 {msg}</form></body></html>"""
 
 
+REPO = "https://github.com/agmonp/muse-life-graph"
+DOWNLOAD = f"{REPO}/releases/latest/download/MuseLifeGraph-windows.zip"   # built by .github/workflows/release.yml
+SETUP_OPEN = ("/setup", "/api/setup", "/app/logo.svg", "/api/version")
+
+
 @app.middleware("http")
 async def site_guard(request: Request, call_next):
     path = request.url.path
+    if DESKTOP and not path.startswith(SETUP_OPEN) and not settings().configured():
+        # the downloaded app before its user has given it their own keys
+        if path.startswith("/api/"):
+            return JSONResponse({"detail": "Set up your keys first", "setup": True}, status_code=409)
+        return RedirectResponse("/setup")
     if site.enabled():
         if site.CODE and request.cookies.get("mlg_code") != site.CODE and not path.startswith(OPEN):
             if path.startswith("/api/"):
@@ -157,6 +167,29 @@ def api_version():
     return {"build": BUILD}
 
 
+# ---------------- the downloaded app's first run: the user's own keys ----------------
+
+@app.get("/setup")
+def setup_page():
+    if not DESKTOP:
+        return RedirectResponse("/")
+    return FileResponse(STATIC / "setup.html", headers={"Cache-Control": "no-cache"})
+
+
+@app.get("/api/setup")
+def api_setup():
+    from mlg import firstrun
+    return firstrun.status()
+
+
+@app.post("/api/setup")
+def api_setup_save(body: dict):
+    from mlg import firstrun
+    if not DESKTOP:
+        raise HTTPException(404)
+    return firstrun.save(body)
+
+
 @app.on_event("startup")
 def warm_up():
     """Work out the library, the memories and the people network once, before anyone asks."""
@@ -205,8 +238,7 @@ def _or404(x):
 
 @app.get("/api/overview")
 def api_overview():
-    return {**library.overview(), "site": site.enabled(),
-            "repo": "https://github.com/agmonp/muse-life-graph"}
+    return {**library.overview(), "site": site.enabled(), "desktop": DESKTOP, "repo": REPO, "download": DOWNLOAD}
 
 
 @app.get("/api/memories")

@@ -8,12 +8,13 @@ from __future__ import annotations
 
 import json
 import re
-import shutil
 import subprocess
 from datetime import datetime, timezone
 from pathlib import Path
 
 from PIL import Image
+
+from mlg import tools
 
 EXIF_IFD = 0x8769
 DATETIME_ORIGINAL, DATETIME_DIGITIZED, DATETIME = 36867, 36868, 306
@@ -48,7 +49,7 @@ def exif_date(path: Path) -> datetime | None:
 
 
 def container_date(path: Path) -> datetime | None:
-    exe = shutil.which("ffprobe")
+    exe = tools.ffprobe()
     if not exe:
         return None
     r = subprocess.run([exe, "-v", "error", "-show_entries", "format_tags=creation_time",

@@ -4,12 +4,12 @@ from __future__ import annotations
 import base64
 import hashlib
 import io
-import shutil
 import subprocess
 from pathlib import Path
 
 from PIL import Image, ImageOps
 
+from mlg import tools
 from mlg.config import CACHE
 
 CONVERTED = CACHE / "converted"
@@ -56,7 +56,7 @@ def image_data_url(path_or_img: Path | Image.Image, max_side: int = 1568) -> str
 
 
 def _ffmpeg() -> str:
-    exe = shutil.which("ffmpeg")
+    exe = tools.ffmpeg()
     if not exe:
         raise RuntimeError("ffmpeg not found on PATH")
     return exe
@@ -99,7 +99,7 @@ def to_mp4(src: Path, max_height: int = 720) -> Path:
 
 
 def probe_duration(src: Path) -> float | None:
-    exe = shutil.which("ffprobe")
+    exe = tools.ffprobe()
     if not exe:
         return None
     r = subprocess.run([exe, "-v", "error", "-show_entries", "format=duration",

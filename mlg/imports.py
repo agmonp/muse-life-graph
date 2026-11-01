@@ -45,7 +45,9 @@ else:
 
 
 def pick(what: str) -> list[str]:
-    r = subprocess.run([sys.executable, "-c", _PICK, what], capture_output=True, text=True, timeout=600)
+    # the built app has no Python to hand code to: it runs itself with --pick (mlg/desktop.py)
+    cmd = [sys.executable, "--pick", what] if getattr(sys, "frozen", False) else [sys.executable, "-c", _PICK, what]
+    r = subprocess.run(cmd, capture_output=True, text=True, timeout=600)
     return [line for line in r.stdout.splitlines() if line.strip()]
 
 

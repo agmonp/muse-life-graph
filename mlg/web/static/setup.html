@@ -1,0 +1,120 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Set up Muse Life Graph</title>
+<link rel="icon" href="/app/logo.svg">
+<style>
+  :root { --bg: #f6f1ea; --surface: #fffdfa; --ink: #1e1916; --ink-2: #5f564f; --ink-3: #8f857c; --line: #d8ccbf;
+          --accent: #d9542a; --ok: #2f7d5b; --bad: #c92a2a; --soft: #efe8de; }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #121010; --surface: #1d1a18; --ink: #f2ece4; --ink-2: #b3a99f; --ink-3: #7f766e; --line: #3b3430;
+            --accent: #ff7a45; --ok: #5cc493; --bad: #ff6b6b; --soft: #1a1716; }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; min-height: 100vh; background: var(--bg); color: var(--ink); font: 16px/1.5 system-ui, sans-serif;
+         display: grid; grid-template-columns: minmax(0, 640px); justify-content: center; padding: 40px 16px; }
+  main { width: min(640px, 100%); min-width: 0; }
+  code { overflow-wrap: anywhere; }
+  h1 { font: 600 32px/1.15 Georgia, serif; margin: 14px 0 6px; }
+  h2 { font: 600 19px/1.3 Georgia, serif; margin: 0 0 4px; }
+  p { margin: 0 0 10px; color: var(--ink-2); }
+  a { color: var(--accent); }
+  .card { background: var(--surface); border: 1px solid var(--line); border-radius: 18px; padding: 22px; margin-top: 18px; }
+  label { display: block; font-size: 14px; font-weight: 600; margin: 14px 0 6px; }
+  input { width: 100%; padding: 11px 13px; border: 1px solid var(--line); border-radius: 12px; font: inherit;
+          background: var(--bg); color: var(--ink); }
+  .hint { font-size: 13px; color: var(--ink-3); margin-top: 4px; }
+  .res { font-size: 14px; margin-top: 10px; min-height: 1em; }
+  .res.ok { color: var(--ok); } .res.bad { color: var(--bad); }
+  ol { margin: 6px 0 0; padding-left: 20px; color: var(--ink-2); font-size: 14px; }
+  button { margin-top: 22px; width: 100%; padding: 14px; border: 0; border-radius: 999px; background: var(--accent);
+           color: #fff; font: 600 17px system-ui; cursor: pointer; }
+  button:disabled { opacity: .6; cursor: wait; }
+  .privacy { background: var(--soft); border-radius: 14px; padding: 14px 16px; font-size: 14px; color: var(--ink-2); margin-top: 18px; }
+  .opt { font-weight: 400; color: var(--ink-3); }
+</style>
+</head>
+<body>
+<main>
+  <img src="/app/logo.svg" width="44" alt="">
+  <h1>Set up Muse Life Graph</h1>
+  <p>Muse Life Graph runs on this computer and reads your photos where they are. It needs two things of your own:
+    a key for Meta's models, and a free graph database. You pay Meta directly for what Muse reads (about $0.006 a
+    photo; the app shows the estimate before it spends anything).</p>
+
+  <form id="f">
+    <div class="card">
+      <h2>1 · Your Meta Model API key</h2>
+      <ol><li>Open <a href="https://dev.meta.ai" target="_blank" rel="noopener">dev.meta.ai</a> and sign in.</li>
+        <li>Create an API key and copy it.</li></ol>
+      <label for="meta_key">Meta API key</label>
+      <input id="meta_key" name="meta_key" type="password" autocomplete="off" spellcheck="false">
+      <div class="hint" id="meta_key_now"></div>
+      <div class="res" id="r_meta"></div>
+    </div>
+
+    <div class="card">
+      <h2>2 · Your graph database (free)</h2>
+      <ol><li>Open <a href="https://console.neo4j.io" target="_blank" rel="noopener">console.neo4j.io</a> and create a free
+        <b>AuraDB Free</b> instance.</li>
+        <li>Download its credentials file when it offers it: it has the address and the password.</li></ol>
+      <label for="neo4j_uri">Connection URI</label>
+      <input id="neo4j_uri" name="neo4j_uri" placeholder="neo4j+s://xxxxxxxx.databases.neo4j.io" autocomplete="off" spellcheck="false">
+      <label for="neo4j_user">Username</label>
+      <input id="neo4j_user" name="neo4j_user" placeholder="neo4j" autocomplete="off" spellcheck="false">
+      <label for="neo4j_password">Password</label>
+      <input id="neo4j_password" name="neo4j_password" type="password" autocomplete="off" spellcheck="false">
+      <div class="hint" id="neo4j_password_now"></div>
+      <div class="res" id="r_graph"></div>
+    </div>
+
+    <div class="card">
+      <h2>3 · Muse Spark Open on Baseten <span class="opt">(optional)</span></h2>
+      <p>With a Baseten key, search, memory titles and the picture checker run on Meta's open-weights model. Without
+        one, everything uses your Meta key.</p>
+      <label for="baseten_key">Baseten API key</label>
+      <input id="baseten_key" name="baseten_key" type="password" autocomplete="off" spellcheck="false">
+      <div class="hint" id="baseten_key_now"></div>
+      <div class="res" id="r_baseten"></div>
+    </div>
+
+    <div class="privacy">Your keys are saved only on this computer, in <code id="home">your app folder</code>, and
+      sent only to the services they belong to. Your photos never leave this computer except as the model calls
+      themselves.</div>
+    <button id="go" type="submit">Check and save</button>
+    <div class="res" id="r_all" style="text-align:center"></div>
+  </form>
+</main>
+<script>
+const $ = id => document.getElementById(id);
+fetch('/api/setup').then(r => r.json()).then(s => {
+  $('home').textContent = s.home;
+  for (const k of ['neo4j_uri', 'neo4j_user']) if (s.values[k]) $(k).value = s.values[k];
+  for (const k of ['meta_key', 'neo4j_password', 'baseten_key'])
+    if (s.values[k]) $(k + '_now').textContent = `Saved (${s.values[k]}). Leave empty to keep it.`;
+  if (s.configured) $('go').textContent = 'Check and save changes';
+});
+$('f').onsubmit = async e => {
+  e.preventDefault();
+  const body = Object.fromEntries(new FormData($('f')));
+  $('go').disabled = true; $('go').textContent = 'Checking your keys…';
+  for (const k of ['meta', 'graph', 'baseten', 'all']) { $('r_' + k).textContent = ''; $('r_' + k).className = 'res'; }
+  try {
+    const r = await (await fetch('/api/setup', {method: 'POST', headers: {'Content-Type': 'application/json'},
+                                               body: JSON.stringify(body)})).json();
+    for (const [k, v] of Object.entries(r.results || {})) {
+      $('r_' + k).textContent = (v.ok ? '✓ ' : '✕ ') + v.message; $('r_' + k).className = 'res ' + (v.ok ? 'ok' : 'bad');
+    }
+    if (r.ok) { $('r_all').textContent = 'Saved. Opening Muse Life Graph…'; $('r_all').className = 'res ok';
+                setTimeout(() => { location.href = '/#/add'; }, 900); return; }
+    $('r_all').textContent = 'Nothing was saved yet: fix the part marked ✕ and try again.'; $('r_all').className = 'res bad';
+  } catch (err) {
+    $('r_all').textContent = 'Could not reach the app: ' + err.message; $('r_all').className = 'res bad';
+  }
+  $('go').disabled = false; $('go').textContent = 'Check and save';
+};
+</script>
+</body>
+</html>

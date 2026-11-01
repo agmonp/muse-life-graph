@@ -6,7 +6,6 @@ duplicates are found by Hamming distance between 64-bit perceptual hashes.
 from __future__ import annotations
 
 import io
-import shutil
 import subprocess
 from pathlib import Path
 
@@ -14,6 +13,7 @@ import imagehash
 import numpy as np
 from PIL import Image
 
+from mlg import tools
 from mlg.muse.media import open_image, probe_duration
 
 PHOTO_MAX_DIST = 8     # out of 64 bits; re-encodes land at 0-4, bursts at ~4-8
@@ -25,7 +25,7 @@ def photo_hash(path: Path) -> int:
 
 
 def _frame_at(path: Path, t: float) -> Image.Image | None:
-    exe = shutil.which("ffmpeg")
+    exe = tools.ffmpeg()
     r = subprocess.run([exe, "-v", "error", "-ss", f"{t:.2f}", "-i", str(path), "-frames:v", "1",
                         "-vf", "scale=256:-2", "-f", "image2pipe", "-vcodec", "png", "-"],
                        capture_output=True)

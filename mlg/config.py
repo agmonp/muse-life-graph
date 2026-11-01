@@ -1,7 +1,13 @@
-"""Settings loaded once from .env (see .env.example)."""
+"""Settings loaded once from .env (see .env.example).
+
+The downloadable app (`mlg/desktop.py`, built with PyInstaller) keeps everything of its user in one folder,
+%LOCALAPPDATA%/MuseLifeGraph: their keys in settings.env (written by the first-run setup screen) and the
+caches, fingerprints and films in data/. Their photos are read where they are and never copied there.
+"""
 from __future__ import annotations
 
 import os
+import sys
 from dataclasses import dataclass
 from functools import lru_cache
 from pathlib import Path
@@ -9,7 +15,12 @@ from pathlib import Path
 from dotenv import load_dotenv
 
 ROOT = Path(__file__).resolve().parent.parent
-DATA = Path(os.environ.get("MLG_DATA") or ROOT / "data")   # the hosted site keeps its data on a volume
+FROZEN = getattr(sys, "frozen", False)                      # running from the built app
+DESKTOP = FROZEN or os.environ.get("MLG_DESKTOP") == "1"    # the downloadable app (or a test of it from source)
+HOME = Path(os.environ.get("MLG_HOME") or Path(os.environ.get("LOCALAPPDATA") or Path.home()) / "MuseLifeGraph")
+USER_ENV = HOME / "settings.env"
+# the hosted site keeps its data on a volume (MLG_DATA); the app in the user's folder; a checkout in data/
+DATA = Path(os.environ.get("MLG_DATA") or (HOME / "data" if DESKTOP else ROOT / "data"))
 CACHE = DATA / "cache"
 
 
@@ -30,6 +41,10 @@ class Settings:
     neo4j_user: str
     neo4j_password: str
 
+    def configured(self) -> bool:
+        """Enough to work: a Meta key and a graph database."""
+        return bool(self.api_key and self.neo4j_uri and self.neo4j_password)
+
     def require_key(self) -> str:
         if not self.api_key:
             raise RuntimeError("MODEL_API_KEY is empty - put your Meta Model API key in .env")
@@ -38,7 +53,10 @@ class Settings:
 
 @lru_cache(maxsize=1)
 def settings() -> Settings:
-    load_dotenv(ROOT / ".env")
+    if DESKTOP:
+        load_dotenv(USER_ENV, override=True)   # cleared and re-read after the setup screen saves
+    else:
+        load_dotenv(ROOT / ".env")
     e = os.environ.get
     return Settings(
         api_key=e("MODEL_API_KEY", ""),

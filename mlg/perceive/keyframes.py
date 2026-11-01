@@ -5,10 +5,10 @@ images plus an audio part in one Chat call are both understood.
 """
 from __future__ import annotations
 
-import shutil
 import subprocess
 from pathlib import Path
 
+from mlg import tools
 from mlg.config import CACHE
 from mlg.muse.media import probe_duration, sha256_file, to_wav
 
@@ -17,7 +17,7 @@ MAX_AUDIO_S = 300
 
 
 def has_audio(path: Path) -> bool:
-    r = subprocess.run([shutil.which("ffprobe"), "-v", "error", "-select_streams", "a",
+    r = subprocess.run([tools.ffprobe(), "-v", "error", "-select_streams", "a",
                         "-show_entries", "stream=index", "-of", "csv=p=0", str(path)],
                        capture_output=True, text=True)
     return bool(r.stdout.strip())
@@ -34,7 +34,7 @@ def keyframes(path: Path, max_frames: int = 8, every_s: float = 3.0, width: int 
     for i, t in enumerate(times):
         out = out_dir / f"f{i:02d}_{t:07.2f}.jpg"
         if not out.exists():
-            subprocess.run([shutil.which("ffmpeg"), "-y", "-loglevel", "error", "-ss", f"{t:.2f}", "-i", str(path),
+            subprocess.run([tools.ffmpeg(), "-y", "-loglevel", "error", "-ss", f"{t:.2f}", "-i", str(path),
                             "-frames:v", "1", "-vf", f"scale={width}:-2", "-q:v", "3", str(out)], check=True)
         if out.exists():
             frames.append((round(t, 2), out))

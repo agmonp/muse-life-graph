@@ -9,7 +9,6 @@
 """
 from __future__ import annotations
 
-import shutil
 import subprocess
 from functools import lru_cache
 from pathlib import Path
@@ -18,6 +17,7 @@ import numpy as np
 import soundfile as sf
 from PIL import Image, ImageDraw, ImageFilter, ImageFont, features
 
+from mlg import tools
 from mlg.muse.media import open_image
 from mlg.perceive.keyframes import keyframes
 from mlg.studio import music
@@ -205,7 +205,7 @@ class Clip:
     def __init__(self, shot: dict, W: int, H: int):
         self.W, self.H, self.dur = W, H, shot["dur"]
         self.proc = subprocess.Popen(
-            [shutil.which("ffmpeg"), "-v", "error", "-ss", f"{shot.get('t0', 0):.2f}", "-i", shot["path"],
+            [tools.ffmpeg(), "-v", "error", "-ss", f"{shot.get('t0', 0):.2f}", "-i", shot["path"],
              "-t", f"{shot['dur']:.2f}", "-vf",
              f"scale={W}:{H}:force_original_aspect_ratio=increase,crop={W}:{H},fps={FPS}",
              "-f", "rawvideo", "-pix_fmt", "rgb24", "-"], stdout=subprocess.PIPE)
@@ -239,7 +239,7 @@ def render_video(edl: dict, out: Path, height: int = 720) -> Path:
     subs += [(s["start"] + 0.2, s["start"] + s["dur"] - 0.3, s["subtitle"]) for s in shots if s.get("subtitle")]
     subs = [c for a0, a1, txt in subs for c in subtitle_chunks(txt, a0, a1, W, H)]
     sub_layers = {txt: Overlay(subtitle_layer(txt, W, H)) for _, _, txt in subs}
-    enc = subprocess.Popen([shutil.which("ffmpeg"), "-y", "-v", "error", "-f", "rawvideo", "-pix_fmt", "rgb24",
+    enc = subprocess.Popen([tools.ffmpeg(), "-y", "-v", "error", "-f", "rawvideo", "-pix_fmt", "rgb24",
                             "-s", f"{W}x{H}", "-r", str(FPS), "-i", "-", "-c:v", "libx264", "-preset", "veryfast",
                             "-crf", "20", "-pix_fmt", "yuv420p", str(out)], stdin=subprocess.PIPE)
     live: dict[int, tuple] = {}
@@ -283,7 +283,7 @@ def render_video(edl: dict, out: Path, height: int = 720) -> Path:
 
 
 def _pcm(path: str, t0: float, dur: float) -> np.ndarray:
-    r = subprocess.run([shutil.which("ffmpeg"), "-v", "error", "-ss", f"{t0:.2f}", "-i", path, "-t", f"{dur:.2f}",
+    r = subprocess.run([tools.ffmpeg(), "-v", "error", "-ss", f"{t0:.2f}", "-i", path, "-t", f"{dur:.2f}",
                         "-vn", "-ac", "1", "-ar", str(SR), "-f", "f32le", "-"], capture_output=True)
     return np.frombuffer(r.stdout, np.float32).copy()
 
@@ -352,7 +352,7 @@ def render(edl: dict, out_dir: Path, height: int = 720, seed: int = 0) -> Path:
     video = render_video(edl, out_dir / "video_only.mp4", height)
     audio = render_audio(edl, out_dir / "mix.wav", seed)
     final = out_dir / "film.mp4"
-    subprocess.run([shutil.which("ffmpeg"), "-y", "-v", "error", "-i", str(video), "-i", str(audio),
+    subprocess.run([tools.ffmpeg(), "-y", "-v", "error", "-i", str(video), "-i", str(audio),
                     "-c:v", "copy", "-c:a", "aac", "-b:a", "160k", "-shortest", "-movflags", "+faststart",
                     str(final)], check=True)
     video.unlink(missing_ok=True)

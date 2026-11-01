@@ -121,6 +121,7 @@ async function route() {
   if (OV && !OV.photos && !OV.videos && name !== 'add') return welcome();
   shell(name);
   demoBanner();
+  const keys = $('#settings-link'); if (keys) keys.hidden = !OV?.desktop;   // the downloaded app: change your keys
   const page = $('#page');
   page.innerHTML = '<div class="skeleton" style="height:220px"></div>';
   window.scrollTo(0, 0);
@@ -170,7 +171,7 @@ function demoBanner() {
     <span><b>A live demo.</b> This is one family's real life graph, shared with their consent: ${OV.photos.toLocaleString()} photos and
     ${OV.videos} videos, read by Muse. The product itself runs on <b>your own computer, on your own photos</b> — nothing leaves it
     except the calls to Meta's models. Here you can browse, search, ask and make films; names can't be changed.</span>
-    <span class="chips"><a class="btn sm primary" href="${esc(OV.repo)}#run-it-on-your-own-photos" target="_blank" rel="noopener">Run it on your photos</a>
+    <span class="chips"><a class="btn sm primary" href="#/add">Run it on your photos</a>
     <button class="btn sm ghost" data-close aria-label="Close">${ic('close')}</button></span></div>`);
   $('#demo-banner [data-close]').onclick = () => {
     $('#demo-banner').remove();
@@ -183,11 +184,12 @@ function siteAddPage() {
       <p>This demo shows one family's library. Muse Life Graph is made to run where your photos are: on your computer,
       reading a folder or your Facebook / Instagram download in place. Your files never leave it.</p></div></div>
     <div class="card pad steps">
-      <div class="step"><span class="dot">1</span><div><b>Install</b><div class="small muted">Python 3.12+, then the project from GitHub (one command in the README).</div></div></div>
-      <div class="step"><span class="dot">2</span><div><b>Your Meta Model API key</b><div class="small muted">Muse Spark, Wonder, Voice Transcribe and Muse Image do the understanding.</div></div></div>
+      <div class="step"><span class="dot">1</span><div><b>Download the app</b><div class="small muted">Windows 10 or 11: unzip it and open MuseLifeGraph.exe. On a Mac or Linux, run it from the source (README).</div></div></div>
+      <div class="step"><span class="dot">2</span><div><b>Your own keys</b><div class="small muted">The first screen asks for your Meta Model API key and a free graph database (Neo4j AuraDB Free). They stay on your computer; you pay Meta directly, about $0.006 a photo.</div></div></div>
       <div class="step"><span class="dot">3</span><div><b>Choose a folder or your Meta download</b><div class="small muted">Copies are found and set aside, the cost is shown before Muse looks.</div></div></div>
       <div class="step"><span class="dot">4</span><div><b>Your life graph</b><div class="small muted">Memories, people, circles, search and films, all on your machine.</div></div></div>
-      <a class="btn primary" style="align-self:flex-start;margin-top:8px" href="${esc(OV.repo)}#run-it-on-your-own-photos" target="_blank" rel="noopener">Instructions on GitHub</a></div>`;
+      <div class="chips" style="margin-top:8px"><a class="btn primary" href="${esc(OV.download)}">${ic('download')}Download for Windows</a>
+        <a class="btn ghost" href="${esc(OV.repo)}#run-it-on-your-own-computer" target="_blank" rel="noopener">Instructions and source on GitHub</a></div></div>`;
 }
 
 /* ---------------- welcome / import ---------------- */
