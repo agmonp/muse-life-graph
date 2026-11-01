@@ -1,0 +1,217 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#f6f1ea" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#121010" media="(prefers-color-scheme: dark)">
+<meta name="description" content="Turn your family photos and videos into a life graph and a personal film, made by a crew of Meta Muse agents. Runs on your own computer.">
+<title>Muse Life Graph</title>
+<link rel="icon" href="/app/logo.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,560;9..144,650&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg: #f6f1ea; --bg-2: #efe8de; --surface: #fffdfa; --ink: #1e1916; --ink-2: #5f564f; --ink-3: #8f857c;
+  --line: #e6ddd2; --line-2: #d8ccbf; --accent: #d9542a; --accent-2: #b8431d; --accent-soft: #fbe4d8;
+  --accent-ink: #fff; --plum: #6d4c74; --plum-soft: #efe3f1; --ok: #2f7d5b; --ok-soft: #dff1e7; --bad: #c92a2a;
+  --shadow: 0 1px 2px rgba(60, 40, 20, .06), 0 8px 24px rgba(60, 40, 20, .07);
+  --serif: "Fraunces", Georgia, serif; --sans: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #121010; --bg-2: #1a1716; --surface: #1d1a18; --ink: #f2ece4; --ink-2: #b3a99f; --ink-3: #7f766e;
+    --line: #2d2825; --line-2: #3b3430; --accent: #ff7a45; --accent-2: #ff9466; --accent-soft: #3b231a;
+    --accent-ink: #1a0d07; --plum: #c7a3cf; --plum-soft: #2e2330; --ok: #5cc493; --ok-soft: #173327; --bad: #ff8a8a;
+    --shadow: 0 1px 2px rgba(0, 0, 0, .3), 0 8px 24px rgba(0, 0, 0, .3);
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #121010; --bg-2: #1a1716; --surface: #1d1a18; --ink: #f2ece4; --ink-2: #b3a99f; --ink-3: #7f766e;
+  --line: #2d2825; --line-2: #3b3430; --accent: #ff7a45; --accent-2: #ff9466; --accent-soft: #3b231a;
+  --accent-ink: #1a0d07; --plum: #c7a3cf; --plum-soft: #2e2330; --ok: #5cc493; --ok-soft: #173327; --bad: #ff8a8a;
+  --shadow: 0 1px 2px rgba(0, 0, 0, .3), 0 8px 24px rgba(0, 0, 0, .3);
+}
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body { margin: 0; background: var(--bg); color: var(--ink); font: 16px/1.55 var(--sans); }
+a { color: inherit; }
+.wrap { width: min(1120px, 100% - 32px); margin-inline: auto; }
+
+header { display: flex; align-items: center; gap: 12px; padding: 18px 0; }
+.brand { display: flex; align-items: center; gap: 10px; text-decoration: none; font-weight: 650; }
+.brand img { width: 34px; height: 34px; }
+header nav { margin-left: auto; display: flex; gap: 4px; }
+header nav a { text-decoration: none; color: var(--ink-2); font-weight: 500; font-size: 15px; padding: 8px 12px; border-radius: 999px; }
+header nav a:hover { background: var(--bg-2); color: var(--ink); }
+
+.hero { display: grid; grid-template-columns: 1.25fr .9fr; gap: 48px; align-items: center; padding: 40px 0 56px; }
+.eyebrow { display: inline-block; font-size: 13px; font-weight: 600; letter-spacing: .02em; color: var(--plum);
+  background: var(--plum-soft); padding: 5px 12px; border-radius: 999px; margin-bottom: 18px; }
+h1 { font: 560 clamp(38px, 6vw, 64px)/1.04 var(--serif); letter-spacing: -.02em; margin: 0 0 18px; text-wrap: balance; }
+h1 em { font-style: italic; color: var(--accent); }
+.lede { font-size: 19px; color: var(--ink-2); margin: 0 0 28px; max-width: 34em; text-wrap: pretty; }
+.ctas { display: flex; flex-wrap: wrap; gap: 10px; }
+.btn { display: inline-flex; align-items: center; gap: 8px; text-decoration: none; font: 600 16px var(--sans);
+  padding: 13px 22px; border-radius: 999px; border: 1px solid var(--line-2); background: var(--surface); color: var(--ink); cursor: pointer; }
+.btn:hover { border-color: var(--ink-3); }
+.btn.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+.btn.primary:hover { background: var(--accent-2); border-color: var(--accent-2); }
+.btn svg { width: 18px; height: 18px; flex: none; }
+.fine { font-size: 14px; color: var(--ink-3); margin: 12px 0 0; }
+
+.judges { background: var(--surface); border: 1px solid var(--line); border-radius: 20px; padding: 28px; box-shadow: var(--shadow); scroll-margin-top: 16px; }
+.judges .tag { font-size: 13px; font-weight: 600; color: var(--accent); text-transform: uppercase; letter-spacing: .06em; margin: 0 0 8px; }
+.judges h2 { font: 560 24px/1.2 var(--serif); margin: 0 0 10px; }
+.judges p { color: var(--ink-2); margin: 0 0 14px; font-size: 15px; }
+.judges .where { background: var(--bg); border-radius: 12px; padding: 12px 14px; font-size: 14px; color: var(--ink-2); margin-bottom: 16px; }
+.judges .where b { color: var(--ink); }
+.judges label { display: block; font-size: 14px; font-weight: 600; margin-bottom: 6px; }
+.judges input { width: 100%; padding: 12px 14px; border: 1px solid var(--line-2); border-radius: 12px; font: inherit;
+  background: var(--bg); color: var(--ink); }
+.judges input:focus { outline: 2px solid var(--accent); outline-offset: 1px; border-color: transparent; }
+.judges .btn { width: 100%; justify-content: center; margin-top: 10px; }
+.judges .err { color: var(--bad); font-size: 14px; font-weight: 500; margin: 10px 0 0; }
+
+section { padding: 36px 0; }
+section .wrap > h2 { font: 560 clamp(28px, 4vw, 38px)/1.15 var(--serif); margin: 0 0 8px; letter-spacing: -.01em; }
+section .wrap > .sub { color: var(--ink-2); margin: 0 0 28px; font-size: 17px; max-width: 40em; }
+.video { position: relative; aspect-ratio: 16 / 9; border-radius: 20px; overflow: hidden; background: #000; box-shadow: var(--shadow); }
+.video iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; }
+
+.steps { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; counter-reset: s; padding: 0; margin: 0; list-style: none; }
+.steps li { background: var(--surface); border: 1px solid var(--line); border-radius: 18px; padding: 22px; }
+.steps li::before { counter-increment: s; content: counter(s); display: grid; place-items: center; width: 32px; height: 32px;
+  border-radius: 50%; background: var(--accent-soft); color: var(--accent); font-weight: 700; margin-bottom: 14px; }
+.steps h3 { font: 600 17px/1.3 var(--sans); margin: 0 0 6px; }
+.steps p { margin: 0; color: var(--ink-2); font-size: 15px; }
+
+.own { display: grid; grid-template-columns: 1fr 1fr; gap: 32px; background: var(--surface); border: 1px solid var(--line);
+  border-radius: 24px; padding: 36px; }
+.own h2 { font: 560 clamp(26px, 3.6vw, 34px)/1.15 var(--serif); margin: 0 0 12px; }
+.own p { color: var(--ink-2); margin: 0 0 20px; }
+.own ul { list-style: none; padding: 0; margin: 0; display: grid; gap: 12px; }
+.own li { display: grid; grid-template-columns: 24px 1fr; gap: 10px; font-size: 15px; color: var(--ink-2); }
+.own li b { color: var(--ink); font-weight: 600; }
+.own li svg { width: 20px; height: 20px; color: var(--ok); margin-top: 2px; }
+.own .note { font-size: 14px; color: var(--ink-3); margin: 16px 0 0; }
+
+footer { border-top: 1px solid var(--line); padding: 28px 0 40px; color: var(--ink-3); font-size: 14px; display: flex; flex-wrap: wrap; gap: 8px 20px; }
+footer a { color: var(--ink-2); }
+
+@media (max-width: 900px) {
+  .hero { grid-template-columns: 1fr; gap: 32px; padding-top: 16px; }
+  .steps { grid-template-columns: 1fr 1fr; }
+  .own { grid-template-columns: 1fr; padding: 24px; }
+}
+@media (max-width: 560px) {
+  header nav a.hide-sm { display: none; }
+  .steps { grid-template-columns: 1fr; }
+  .btn { flex: 1 1 auto; justify-content: center; }
+  .judges { padding: 22px; }
+  .lede { font-size: 17px; }
+  section { padding: 28px 0; }
+}
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="i-down" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v11m0 0-4.5-4.5M12 15l4.5-4.5M5 20h14"/></symbol>
+  <symbol id="i-play" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5.5v13a1 1 0 0 0 1.5.86l10.5-6.5a1 1 0 0 0 0-1.72L9.5 4.64A1 1 0 0 0 8 5.5Z"/></symbol>
+  <symbol id="i-code" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 8-4 4 4 4m6-8 4 4-4 4"/></symbol>
+  <symbol id="i-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m5 12.5 4.5 4.5L19 7.5"/></symbol>
+</svg>
+
+<div class="wrap">
+  <header>
+    <a class="brand" href="/"><img src="/app/logo.svg" alt="">Muse Life Graph</a>
+    <nav>
+      <a class="hide-sm" href="#video">Demo</a>
+      <a class="hide-sm" href="#run">Run it</a>
+      <a href="{repo}">GitHub</a>
+    </nav>
+  </header>
+
+  <div class="hero">
+    <div>
+      <span class="eyebrow">Built for the Meta Global AI Developer Hackathon</span>
+      <h1>Your family photos, <em>as a film.</em></h1>
+      <p class="lede">Muse Life Graph reads thousands of photos and videos, learns who is who and when things happened,
+        and turns one sentence into a personal film. A crew of Meta Muse agents writes it, checks every picture,
+        watches its own draft and re-cuts it.</p>
+      <div class="ctas">
+        <a class="btn primary" href="{download}"><svg><use href="#i-down"/></svg>Download for Windows</a>
+        <a class="btn" href="#video"><svg><use href="#i-play"/></svg>Watch the 3-minute demo</a>
+      </div>
+      <p class="fine">Free and open source. Runs on your own computer with your own Meta API key.</p>
+    </div>
+
+    <form class="judges" id="judges" method="post" action="/enter">
+      <p class="tag">For hackathon judges</p>
+      <h2>Live demo access</h2>
+      <p>The live demo is one real family's photo library, shared with consent, so it is open to judges only.</p>
+      <div class="where">The access code is in our submission: <b>Project Description</b>, first lines, under <b>TRY IT</b>.</div>
+      <label for="code">Access code</label>
+      <input id="code" name="code" type="password" autocomplete="off" placeholder="From the submission">
+      <button class="btn primary" type="submit">Enter the demo</button>
+      {msg}
+    </form>
+  </div>
+</div>
+
+<section id="video">
+  <div class="wrap">
+    <h2>See it in 3 minutes</h2>
+    <p class="sub">A real archive, a real request, and the crew at work, from the first look at the photos to the finished film.</p>
+    <div class="video">
+      <iframe src="https://www.youtube-nocookie.com/embed/JX4o7B06awk" title="Muse Life Graph demo"
+        loading="lazy" allow="accelerometer; encrypted-media; gyroscope; picture-in-picture; fullscreen" allowfullscreen></iframe>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <h2>How it works</h2>
+    <p class="sub">Not a photo tagger: every step keeps its evidence, and the crew checks its own work.</p>
+    <ol class="steps">
+      <li><h3>Add your photos</h3><p>Point it at a folder or your Facebook or Instagram download. Files are read where they are; copies are set aside by visual fingerprint.</p></li>
+      <li><h3>Muse understands them</h3><p>Who is there, what happened, and when, with the reason. A name goes on a face only when two independent signals agree.</p></li>
+      <li><h3>Ask for a film</h3><p>"A film of my daughter growing up." The crew researches, writes, asks you what only you know, edits, scores and narrates.</p></li>
+      <li><h3>It watches and re-cuts</h3><p>A critic watches the draft and leaves timed notes. The editor re-cuts, and a blind test picks the better version.</p></li>
+    </ol>
+  </div>
+</section>
+
+<section id="run">
+  <div class="wrap">
+    <div class="own">
+      <div>
+        <h2>Run it on your own photos</h2>
+        <p>Your family's photos never have to leave home. The app runs on your computer and reads your photos in place.</p>
+        <div class="ctas">
+          <a class="btn primary" href="{download}"><svg><use href="#i-down"/></svg>Download for Windows</a>
+          <a class="btn" href="{repo}"><svg><use href="#i-code"/></svg>Source code</a>
+        </div>
+        <p class="note">Unzip and open MuseLifeGraph.exe. The app isn't code-signed yet: if Windows warns you, choose <i>More info</i>, then <i>Run anyway</i>. macOS and Linux: run from source, see GitHub.</p>
+      </div>
+      <ul>
+        <li><svg><use href="#i-check"/></svg><span><b>Windows 10 or 11.</b> The first screen walks you through setup and tests each key before saving it.</span></li>
+        <li><svg><use href="#i-check"/></svg><span><b>A Meta Model API key</b> from dev.meta.ai. About $0.006 a photo, paid to Meta directly; the app shows the estimate before it spends anything.</span></li>
+        <li><svg><use href="#i-check"/></svg><span><b>A free graph database</b> (Neo4j AuraDB Free, a few minutes to create).</span></li>
+        <li><svg><use href="#i-check"/></svg><span><b>Optional:</b> a Baseten key to run search and checks on Muse Spark Open, and an NVIDIA GPU for music and narration. Without a GPU, films get captions.</span></li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<div class="wrap">
+  <footer>
+    <span>Muse Life Graph · Meta Global AI Developer Hackathon, Oct 26 – Nov 4, 2026</span>
+    <a href="{repo}">GitHub</a>
+    <span>Apache-2.0</span>
+  </footer>
+</div>
+</body>
+</html>

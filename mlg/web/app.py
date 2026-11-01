@@ -66,19 +66,13 @@ from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse  # no
 
 READ_ONLY = ("/api/answer", "/api/answer_group", "/api/undo", "/api/recheck", "/api/import", "/api/titles")
 OPEN = ("/bless/", "/api/bless/", "/app/logo.svg", "/enter", "/api/gpu/")   # /api/gpu/ checks its own token
-CODE_PAGE = """<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Muse Life Graph</title><link rel="icon" href="/app/logo.svg">
-<body style="margin:0;min-height:100vh;display:grid;place-items:center;background:#f6f1ea;font:16px system-ui;color:#1e1916">
-<form method="post" action="/enter" style="background:#fffdfa;padding:32px;border-radius:20px;box-shadow:0 8px 30px #0001;width:min(360px,90vw)">
-<img src="/app/logo.svg" width="44" alt=""><h1 style="font:600 26px Georgia,serif;margin:14px 0 6px">Muse Life Graph</h1>
-<p style="color:#5f564f;margin:0 0 18px">A private demo of one family's life graph. Enter the access code from the submission.</p>
-<input name="code" type="password" autofocus placeholder="Access code" style="width:100%;box-sizing:border-box;padding:12px 14px;border:1px solid #d8ccbf;border-radius:12px;font:inherit">
-<button style="margin-top:12px;width:100%;padding:12px;border:0;border-radius:999px;background:#d9542a;color:#fff;font:600 16px system-ui">Enter</button>
-{msg}</form></body></html>"""
-
-
 REPO = "https://github.com/agmonp/muse-life-graph"
 DOWNLOAD = f"{REPO}/releases/latest/download/MuseLifeGraph-windows.zip"   # built by .github/workflows/release.yml
+# what everyone without the code sees: what the app is, the demo video, the download, and the judges' door
+CODE_PAGE = (APP / "welcome.html").read_text(encoding="utf-8").replace("{repo}", REPO).replace("{download}", DOWNLOAD)
+WRONG_CODE = ('<p class="err" role="alert">That code is not right. It is in the submission\'s Project Description, '
+              'under TRY IT.</p><script>history.replaceState(null,"","/#judges");'
+              'document.getElementById("judges").scrollIntoView();document.getElementById("code").focus()</script>')
 SETUP_OPEN = ("/setup", "/api/setup", "/app/logo.svg", "/api/version")
 
 
@@ -140,7 +134,7 @@ async def enter(request: Request):
         r = RedirectResponse("/", status_code=303)
         r.set_cookie("mlg_code", site.CODE, max_age=60 * 60 * 24 * 30, httponly=True, samesite="lax", secure=True)
         return r
-    return HTMLResponse(CODE_PAGE.replace("{msg}", '<p style="color:#c92a2a">That code is not right.</p>'), status_code=401)
+    return HTMLResponse(CODE_PAGE.replace("{msg}", WRONG_CODE), status_code=401)
 
 
 def _build() -> str:
