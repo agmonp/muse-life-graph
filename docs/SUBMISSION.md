@@ -31,47 +31,40 @@ https://youtu.be/JX4o7B06awk
 
 ## Project Description
 
-**One sentence in, a family film out — written, cut, watched and re-cut by a crew of Meta Muse agents that
-checks its own work.**
+Muse Life Graph: one sentence in, a family film out. A crew of Meta Muse agents writes it, cuts it, watches its own draft and re-cuts it.
 
-**Try it (2 minutes):** https://agmonporat--muse-life-graph-web.us-east.modal.run · access code: ⟨code⟩
-1. Home plays a film the crew made. 2. Search "when did we go to the beach with the kids?" — the answer cites
-the photos it used. 3. Films → open "Taya Growing Up" → see the critic's timestamped notes, the first cut vs
-the re-cut, and the blind test. 4. Make your own film (about 7 minutes). Names are read-only.
-Or run it on your own photos: Windows download in the README.
+TRY IT (2 minutes)
+Live demo: https://agmonporat--muse-life-graph-web.us-east.modal.run  ·  access code: ⟨data/site_code.txt⟩
+1. Home plays a film the crew made.
+2. Search "when did we go to the beach with the kids?" and see the answer cite the photos it used.
+3. Films > "Taya Growing Up": the critic's timestamped notes, first cut vs re-cut, and the blind test.
+4. Make your own film (about 7 minutes). Names are read-only.
+Run it on your own photos: Windows download in the README.
 
-Every family has twenty thousand photos nobody looks at, and old faces nobody can name anymore. Muse Life
-Graph turns that pile into a reasoned life graph, and then a crew of Meta Muse agents turns one sentence
-("a film of Taya growing up, warm and simple") into a personal film that the crew writes, cuts, *watches*
-and re-cuts.
+THE PROBLEM
+Families keep thousands of photos and videos nobody looks at, and old faces nobody can name anymore. Turning them into a birthday or wedding film takes days of searching and editing. Today's AI tools either tag pictures or generate once without checking the result.
 
-It is not a photo tagger or a chat over photos. Muse Spark perceives every photo, video (keyframes plus
-soundtrack) and voice note into a strict schema with evidence, including when a scan was taken and why it
-thinks so. Copies are found by perceptual fingerprint. A name goes on a face only when two independent keys
-agree (a local face fingerprint and a second witness); unnamed faces are grouped so one answer names many.
-Everything lands in a Neo4j graph, where network science (a significant-tie backbone, Louvain circles,
-bridges) shows the circles of a life forming and fading year by year.
+WHAT IT DOES
+- Understands, not just tags: Muse Spark perceives each photo, video (keyframes and soundtrack together) and voice note into a strict schema with evidence, including when an undated scan was taken and why it thinks so. Copies are found by perceptual fingerprint.
+- Names people carefully: a name goes on a face only when two independent keys agree (a local face fingerprint and a second witness). Unnamed faces are grouped, so one answer names many.
+- Builds a life graph: Neo4j holds moments, people, places and evidence; network science (backbone, Louvain circles, bridges) shows the circles of a life forming and fading year by year.
+- Makes the film with an agent crew: Researcher (queries the graph) > Producer (Muse Spark) > Screenwriter (Muse Wonder) > pauses to ask the owner what only they know > Picture Checker (Muse Spark Open) > Editor > Sound (MusicGen score, SeamlessM4T narration) > Critic: Muse Wonder watches the rendered draft video and gives timestamped notes > re-cut > blind test.
+- Search and ask in any language, answered only from the moments found, with citations.
 
-The film crew is a chain of agents with tools: Researcher (queries the graph), Producer (Muse Spark),
-Screenwriter (Muse Wonder), a pause where the crew asks the owner what only they know (answers go back into
-the graph), a Picture Checker that looks at every picture against its narration, an Editor, Sound (Meta
-MusicGen score and SeamlessM4T narration on a local GPU), and a Critic: Muse Wonder watches the rendered
-draft video, puts timestamped notes on the timeline, the Editor re-cuts, and a blind test shows Wonder both
-cuts without saying which is the revision. Search and questions in any language are answered only from the
-moments found, with citations. Search, memory titles, circle names and the Picture Checker run on
-**Muse Spark Open (open weights) on Baseten**.
+RESULTS (real data, docs/EVALS.md)
+- Blind test over all 8 finished films, in both orders: Muse Wonder preferred the critic's re-cut in 12 of 16 viewings.
+- Two-key face links: 93% precision (face fingerprints alone: 80%).
+- A film takes a median 7 minutes and $3 of model calls.
+- Measuring exposed a real bug (the Picture Checker's rejections were ignored), now fixed.
 
-Measured on real data (docs/EVALS.md): in a blind test over all 8 finished films, shown in both orders, Muse preferred the critic's re-cut in 12 of 16 viewings; face fingerprints alone name people at 80% precision against the owner's earlier records, and the app's two-key links at 93%; a film takes a median 7 minutes and $3 of model calls. Measuring also exposed a bug (the Picture Checker's rejections were ignored), now fixed.
+WHAT'S NEW
+Everything shown was built from an empty repository during the hackathon (first commit Oct 26; git log shows every step). The demo library is the author's own family photos, shared with consent. The only thing brought in from before is data: names and reference faces from the author's earlier private database.
 
-Built from an empty repository during the hackathon (first commit 2026-10-26). The demo library is the
-author's own family photos, shared with consent; names and reference faces were imported as data from the
-author's earlier private database. It is designed to run on your own computer, so your family's photos never have to
-leave home: anyone can download it for Windows (link in the README) and use it with their own Meta key and a free
-graph database.
+PRIVATE BY DESIGN
+Built to run on your own computer, so family photos never have to leave home: download for Windows, bring your own Meta key and a free graph database.
 
-Fits the bonus categories: **open weights** (Muse Spark Open on Baseten runs search, titles, circles and the
-Picture Checker; MusicGen and SeamlessM4T on a home GPU), **agentic** (a crew that pauses to ask, critiques
-and re-cuts), **creative** (a personal film from one sentence).
+BONUS CATEGORIES
+Open weights (Muse Spark Open on Baseten for search, titles, circles and the Picture Checker; MusicGen and SeamlessM4T on a home GPU) · Agentic (a crew that pauses to ask, critiques and re-cuts) · Creative (a personal film from one sentence).
 
 ## Describe your use of Meta products to build the submitted project
 
@@ -80,7 +73,7 @@ and re-cuts), **creative** (a personal film from one sentence).
   when with a reason, what was said, evidence). Also the Producer agent and the narration-vs-picture judge in
   our evals.
 - **Muse Spark Open (`meta-models/muse-spark-open-1026`) on Baseten:** reads every search question into
-  people, years and search words (Hebrew and English), writes cited answers, titled all 473 memories, names the
+  people, years and search words (Hebrew and English), writes cited answers, titles all 473 memories, names the
   circles of people, and runs the Picture Checker on film scenes with images. A provider switch in
   `mlg/muse/chat.py` routes these tasks to it, falls back to the API on failure, and logs which model served
   each call; the app shows "served by Muse Spark Open on Baseten". We measured it against the Muse Spark API on
