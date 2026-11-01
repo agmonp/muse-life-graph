@@ -31,6 +31,15 @@ https://github.com/agmonp/muse-life-graph
 
 ## Project Description
 
+**One sentence in, a family film out — written, cut, watched and re-cut by a crew of Meta Muse agents that
+checks its own work.**
+
+**Try it (2 minutes):** https://agmonporat--muse-life-graph-web.us-east.modal.run · access code: ⟨code⟩
+1. Home plays a film the crew made. 2. Search "when did we go to the beach with the kids?" — the answer cites
+the photos it used. 3. Films → open "Taya Growing Up" → see the critic's timestamped notes, the first cut vs
+the re-cut, and the blind test. 4. Make your own film (about 7 minutes). Names are read-only.
+Or run it on your own photos: Windows download in the README.
+
 Every family has twenty thousand photos nobody looks at, and old faces nobody can name anymore. Muse Life
 Graph turns that pile into a reasoned life graph, and then a crew of Meta Muse agents turns one sentence
 ("a film of Taya growing up, warm and simple") into a personal film that the crew writes, cuts, *watches*
@@ -60,9 +69,9 @@ author's earlier private database. It is designed to run on your own computer, s
 leave home: anyone can download it for Windows (link in the README) and use it with their own Meta key and a free
 graph database.
 
-**Live demo:** https://agmonporat--muse-life-graph-web.us-east.modal.run
-**Access code for judges:** ⟨paste the code from data/site_code.txt⟩. Browse, search, ask, and make a film
-under Films (about 5 minutes); names are read-only.
+Fits the bonus categories: **open weights** (Muse Spark Open on Baseten runs search, titles, circles and the
+Picture Checker; MusicGen and SeamlessM4T on a home GPU), **agentic** (a crew that pauses to ask, critiques
+and re-cuts), **creative** (a personal film from one sentence).
 
 ## Describe your use of Meta products to build the submitted project
 
