@@ -565,3 +565,37 @@ select.field { appearance: none; padding-right: 36px; background-image: linear-g
 .served { display: inline-flex; align-items: center; gap: 6px; margin-top: 8px; font-size: 12px; color: var(--ink-3); }
 .served svg { width: 13px; height: 13px; }
 .understood .served { margin-top: 0; }
+
+/* ---------- home layouts being compared (?home=a: the promise first, ?home=b: the film behind it) ---------- */
+.promise { padding: 28px 0 8px; display: flex; flex-direction: column; gap: 14px; max-width: 860px; }
+.promise h1, .cinema h1 { font: 600 clamp(34px, 5vw, 60px)/1.05 var(--serif); margin: 0; letter-spacing: -.01em; }
+.lede { font-size: 18px; color: var(--ink-2); margin: 0; max-width: 640px; }
+.promise .askbox, .cinema .askbox { margin-top: 6px; }
+.counters { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; margin-top: 10px; }
+.counters div { background: var(--surface); border: 1px solid var(--line); border-radius: 16px; padding: 12px 14px; }
+.counters b { display: block; font: 600 26px var(--serif); color: var(--ink); }
+.counters span { font-size: 12px; color: var(--ink-3); text-transform: uppercase; letter-spacing: .06em; }
+.cinema { position: relative; min-height: min(72vh, 620px); border-radius: 28px; overflow: hidden; display: flex; align-items: flex-end;
+          background: #12100e; box-shadow: var(--shadow-lg); margin-bottom: 14px; }
+.cinema .bg { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.cinema .veil { position: absolute; inset: 0; background: linear-gradient(90deg, rgba(14, 11, 9, .92) 0%, rgba(14, 11, 9, .7) 45%, rgba(14, 11, 9, .15) 100%),
+                linear-gradient(0deg, rgba(14, 11, 9, .7), transparent 40%); }
+.cinema .over { position: relative; width: 100%; min-width: 0; padding: 40px; max-width: 680px; display: flex; flex-direction: column; gap: 14px; color: #f4ede5; margin-bottom: 48px; }
+.cinema .eyebrow { color: #ffb48f; }
+.cinema h1 { color: #fff; }
+.cinema .lede { color: #e9dccf; }
+.cinema .suggest .chip { background: rgba(255, 255, 255, .1); color: #f4ede5; border-color: rgba(255, 255, 255, .2); }
+.nowplaying { position: absolute; left: 40px; right: 40px; bottom: 18px; display: flex; gap: 8px; align-items: center; color: #e9dccf;
+              font-size: 13px; text-decoration: none; }
+.nowplaying .icon { width: 16px; height: 16px; color: #ff9466; flex: none; }
+.nowplaying b { color: #fff; }
+.notesfold summary { cursor: pointer; color: #ffb48f; font-weight: 600; font-size: 14px; margin: 2px 0 8px; }
+@media (max-width: 760px) {
+  .counters { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .counters b { font-size: 20px; }
+  .cinema { min-height: 0; }
+  .cinema .over { padding: 22px 18px; margin-bottom: 56px; }
+  .nowplaying { left: 18px; right: 18px; }
+}
+
+.rail .nav a[hidden] { display: none; }   /* "Your keys" only in the downloaded app */

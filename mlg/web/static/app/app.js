@@ -73,7 +73,7 @@ function shell(route) {
   const b = (r) => r === 'faces' && n ? `<span class="badge">${n > 999 ? '999+' : n}</span>` : '';
   $('#nav').innerHTML = NAV.map(([r, i, l]) => `<a href="#/${r}" class="${route === r ? 'on' : ''}">${ic(i)}${l}${b(r)}</a>`).join('');
   $('#tabbar').innerHTML = TABS.map(([r, i, l]) => `<a href="#/${r}" class="${route === r ? 'on' : ''}">${ic(i)}${l}${b(r)}</a>`).join('');
-  $$('.rail .nav a[href="#/add"]').forEach(a => a.classList.toggle('on', route === 'add'));
+  $$('.rail .nav a[data-r="add"]').forEach(a => a.classList.toggle('on', route === 'add' && !a.dataset.dl));
 }
 addEventListener('scroll', () => $('#topbar').classList.toggle('scrolled', scrollY > 4), {passive: true});
 $('#theme').onclick = () => {
@@ -122,6 +122,10 @@ async function route() {
   shell(name);
   demoBanner();
   const keys = $('#settings-link'); if (keys) keys.hidden = !OV?.desktop;   // the downloaded app: change your keys
+  const add = $('.rail .nav a[data-r="add"]');   // the demo site cannot import: its button downloads the app instead
+  if (add && OV?.site && !add.dataset.dl) {
+    add.dataset.dl = '1'; add.href = OV.download; add.innerHTML = `${ic('download')}Download for Windows`;
+  }
   const page = $('#page');
   page.innerHTML = '<div class="skeleton" style="height:220px"></div>';
   window.scrollTo(0, 0);
@@ -324,8 +328,9 @@ function greeting() {
   const h = new Date().getHours();
   return h < 5 ? 'Good night' : h < 12 ? 'Good morning' : h < 18 ? 'Good afternoon' : 'Good evening';
 }
-async function home() {
+async function home(_, params) {
   const o = OV;
+  const layout = params?.get('home') || '';   // a / b: home layouts being compared
   const [feat, fg] = await Promise.all([api('/api/featured').catch(() => ({film: null})),
                                         api('/api/face_groups?limit=5&per=1').catch(() => ({groups: [], open: 0}))]);
   const f = feat.film;
@@ -361,7 +366,8 @@ async function home() {
           <div class="eyebrow">What the critic saw in the first cut</div>
           <div class="hint">Muse Wonder watched the draft and wrote these notes; the editor applied them. Tap one to see that moment.</div>
           <div class="strip">${(v1.notes || []).map((n, i) => `<button class="mark" style="left:${Math.min(98, 100 * n.t / (v1.duration || 60)).toFixed(1)}%" data-t="${n.t}" title="${esc(n.problem)}">${i + 1}</button>`).join('')}</div>
-          <div class="notelist">${(v1.notes || []).slice(0, 4).map((n, i) => `<button class="noterow" data-t="${n.t}"><b>${i + 1}</b><span><span class="tiny faint">${mm(n.t)} · ${esc(n.op)}</span><br>${esc(n.problem)}</span></button>`).join('')}</div>
+          ${(() => { const list = `<div class="notelist">${(v1.notes || []).slice(0, 4).map((n, i) => `<button class="noterow" data-t="${n.t}"><b>${i + 1}</b><span><span class="tiny faint">${mm(n.t)} · ${esc(n.op)}</span><br>${esc(n.problem)}</span></button>`).join('')}</div>`;
+            return layout ? `<details class="notesfold"><summary>Read the ${(v1.notes || []).length} notes</summary>${list}</details>` : list; })()}
         </div>
       </section>` : '';
   const hello = `<div class="${f ? 'hello2' : 'hello'}">
@@ -386,6 +392,30 @@ async function home() {
       <div class="small muted">Watch the circles form, grow and fade — year by year. Who bridges them, who is new, who you haven't seen in years.</div></div>
       <span class="btn primary">${ic('play')}Watch them grow</span></a>`;
   const asks = [`When was I happiest?`, `Photos of me as a child`, `Who do I spend the most time with?`];
+  const memories = `<div class="section"><div class="section-head"><div><h2>${o.on_this_day.length ? 'On this day' : 'Recent memories'}</h2><p class="muted small">Moments that belong together, titled by Muse</p></div>
+      <a class="btn ghost sm" href="#/memories">All memories ${ic('arrow')}</a></div>
+      <div class="row-scroll">${(o.on_this_day.length ? o.on_this_day : o.recent).map(memCard).join('')}</div></div>`;
+  if (layout) {
+    const make = `<form class="askbox" id="makeform"><input id="makeq" dir="auto" placeholder="A one-minute film of my daughter growing up, warm and simple" aria-label="Describe a film">
+          <button class="btn primary">${ic('film')}Make it</button></form>
+        <div class="suggest">
+          <button class="chip" data-film="birthday">${ic('cake')}A birthday film</button>
+          <button class="chip" data-film="together">${ic('together')}The two of us</button>
+          <button class="chip" data-film="year">${ic('calendar')}A year in a minute</button></div>`;
+    const counters = `<div class="counters">${[[(o.photos + o.videos).toLocaleString(), 'photos & videos'], [o.people, 'people'], [o.memories, 'memories'],
+      o.years ? [`${o.years[0]}–${String(o.years[1]).slice(2)}`, 'years of photos'] : null].filter(Boolean).map(([n, l]) => `<div><b>${n}</b><span>${l}</span></div>`).join('')}</div>`;
+    const who = `${greeting()}${o.owner ? `, ${esc(o.owner)}` : ''}`;
+    const lede = 'One sentence. A crew of Muse agents finds the moments, writes the film, watches its own first cut and re-cuts it.';
+    const watch = f ? `<div class="section" id="watch"><div class="section-head"><div><h2>One the crew made</h2>
+        <p class="muted small">From one sentence, ${f.made_in ? Math.round(f.made_in / 60) : 'a few'} minutes, no editing by hand.</p></div></div>${screening}</div>` : '';
+    const hero = layout === 'b' && f ? `<section class="cinema">
+        <video class="bg" autoplay muted loop playsinline preload="auto" src="/api/films/${enc(f.id)}/video/v2#t=6"></video><div class="veil"></div>
+        <div class="over"><div class="eyebrow">${who}</div><h1>Your life, as a film.</h1><p class="lede">${lede}</p>${make}</div>
+        <a class="nowplaying" href="#" data-watch>${ic('play')}<span><b>${esc(f.title)}</b> · made from one sentence · the re-cut won the blind test · watch with sound</span></a>
+      </section>${counters}` : `<section class="promise"><div class="eyebrow">${who}</div><h1>Tell the crew what to make</h1>
+        <p class="lede">${lede}</p>${make}${counters}</section>`;
+    return `${hero}${watch}<div class="section duo">${circles}${faces}</div>${memories}`;
+  }
   return `${screening}${hello}
     <div class="section duo">${circles}${faces}</div>
     <div class="section"><div class="section-head"><div><h2>${o.on_this_day.length ? 'On this day' : 'Recent memories'}</h2><p class="muted small">Moments that belong together, titled by Muse</p></div>
@@ -404,6 +434,7 @@ afterRender[''] = () => {
     try { const {id} = await api('/api/films', {request, ask: true}); location.hash = `#/film/${id}`; }
     catch (err) { toast(err.message); }
   };
+  $$('[data-watch]').forEach(a => a.onclick = e => { e.preventDefault(); $('#watch').scrollIntoView({behavior: 'smooth'}); $('#fv')?.play().catch(() => {}); });
   const v = $('#fv');
   if (!v) return;
   const id = v.src.split('/video/')[0];
