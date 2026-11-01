@@ -43,7 +43,45 @@ def _open_when_ready(url: str) -> None:
     webbrowser.open(url)
 
 
+def selftest() -> None:
+    """What a built app must be able to do without any key: run by the build before it is zipped."""
+    import importlib
+    import pkgutil
+    import tempfile
+    from pathlib import Path
+
+    import mlg
+    from PIL import Image
+
+    from mlg import tools
+    from mlg.ingest import dates, phash
+    skip = {"mlg.studio.gpu_worker"}          # runs in the separate GPU environment, not in the app
+    for m in pkgutil.walk_packages(mlg.__path__, "mlg."):
+        if m.name not in skip:
+            importlib.import_module(m.name)
+    with tempfile.TemporaryDirectory() as d:
+        img = Path(d) / "a.jpg"
+        Image.new("RGB", (64, 48), (200, 80, 60)).save(img)
+        assert phash.photo_hash(img) is not None, "photo fingerprint"
+        if tools.ffmpeg() and tools.ffprobe():
+            import subprocess
+            clip = Path(d) / "c.mp4"
+            subprocess.run([tools.ffmpeg(), "-v", "error", "-f", "lavfi", "-i", "testsrc=duration=2:size=160x120:rate=10",
+                            "-c:v", "libx264", str(clip)], check=True)
+            assert phash.video_hash(clip)[0], "video fingerprint"
+            dates.container_date(clip)
+        else:
+            print("selftest: no ffmpeg found (the release bundles one)")
+    import cv2
+    assert hasattr(cv2, "FaceDetectorYN") and hasattr(cv2, "FaceRecognizerSF"), "OpenCV face models"
+    import tkinter  # noqa: F401 - the folder picker
+    print("selftest ok")
+
+
 def main() -> None:
+    if len(sys.argv) > 1 and sys.argv[1] == "--selftest":
+        selftest()
+        return
     if len(sys.argv) > 2 and sys.argv[1] == "--pick":    # the folder / file picker, run as its own process
         from mlg.imports import _PICK
         sys.argv = [sys.argv[0], sys.argv[2]]

@@ -278,6 +278,9 @@ async function addPage() {
       <p class="small muted">Muse looks at each one once: about <b>$${w.dollars.toFixed(2)}</b> and <b>${Math.max(1, Math.round(w.minutes))} min</b>.</p>
       <div class="chips" style="margin-top:12px"><button class="btn primary" id="look">${ic('sparkle')}Let Muse look</button>
       ${w.items > 50 ? `<button class="btn" id="look50">Try 50 first</button>` : ''}</div>`;
+  } else if (st.state === 'ready' && st.unreadable) {
+    body = `<h3>${st.unreadable} ${st.unreadable === 1 ? 'file' : 'files'} could not be read</h3>
+      <p class="muted">Nothing was spent. The first reason: <span class="small">${esc(st.unreadable_why || 'unknown')}</span></p>`;
   } else if (st.state === 'done') {
     body = `<h3>${ic('check')} Done</h3><p class="muted">Your new memories are ready.</p>
       <div class="chips"><a class="btn primary" href="#/memories">See memories</a><a class="btn" href="#/faces">Name the faces Muse found</a></div>`;

@@ -84,7 +84,9 @@ def estimate() -> dict:
 
 
 def _after_find(source: str, found: int, dups: int) -> None:
-    _set(state="ready", source=source, found=found, duplicates=dups, estimate=estimate(), finished=time.time())
+    unread = connect().execute("SELECT count(*), max(error) FROM items WHERE error IS NOT NULL").fetchone()
+    _set(state="ready", source=source, found=found, duplicates=dups, estimate=estimate(), finished=time.time(),
+         unreadable=unread[0], unreadable_why=unread[1])
 
 
 def start_folder(folder: str) -> dict:

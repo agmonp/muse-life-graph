@@ -13,7 +13,9 @@ a = Analysis(
     datas=[(str(ROOT / "mlg" / "web" / "static"), "mlg/web/static"),
            (str(ROOT / "mlg" / "prompts"), "mlg/prompts"),
            (str(ROOT / "LICENSE"), ".")] + collect_data_files("certifi"),
-    hiddenimports=collect_submodules("uvicorn") + collect_submodules("mlg") + ["tkinter", "tkinter.filedialog"],
+    # scipy (pulled in by imagehash) imports parts of itself lazily that the analysis cannot see
+    hiddenimports=collect_submodules("uvicorn") + collect_submodules("mlg") + ["tkinter", "tkinter.filedialog"]
+    + collect_submodules("scipy._external") + collect_submodules("scipy.fft") + collect_submodules("scipy.fftpack"),
     excludes=["torch", "transformers", "pytest", "matplotlib", "IPython", "notebook", "mlg.studio.gpu_worker"],
     noarchive=False,
 )

@@ -34,6 +34,8 @@ if ($FfmpegDir) {
     if (Test-Path $lic) { Copy-Item $lic (Join-Path $ff "LICENSE.txt") }
 }
 Copy-Item (Join-Path $src "packaging\READ-ME-FIRST.txt") $app
+& (Join-Path $app "MuseLifeGraph.exe") --selftest
+if ($LASTEXITCODE) { throw "the built app failed its self-test" }
 
 $envFile = Join-Path $repo ".env"
 & $Python (Join-Path $repo "scripts\check_bundle.py") $app --env $envFile
