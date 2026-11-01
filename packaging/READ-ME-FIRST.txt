@@ -1,0 +1,24 @@
+Muse Life Graph for Windows
+===========================
+
+1. Unzip this folder anywhere (for example Documents\MuseLifeGraph). Keep the files together.
+2. Open MuseLifeGraph.exe. A small window says where it runs; your browser opens the app.
+   Windows may say "Windows protected your PC" because this free app is not code-signed yet:
+   choose "More info", then "Run anyway".
+3. The first screen asks for two things of your own:
+   - a Meta Model API key (https://dev.meta.ai) - you pay Meta directly, about $0.006 a photo;
+     the app shows the estimate before it spends anything;
+   - a free graph database: Neo4j AuraDB Free (https://console.neo4j.io).
+   Optional: a Baseten key, to run search and titles on Meta's open-weights Muse Spark Open.
+4. Choose "Add photos": a folder on this computer, or the .zip files of your Facebook / Instagram download.
+
+Your keys are saved only in %LOCALAPPDATA%\MuseLifeGraph\settings.env, and the app's caches and films
+next to it. Your photos are read where they are and never leave this computer except as the model calls
+themselves. To stop the app, close its window. To remove it, delete this folder and %LOCALAPPDATA%\MuseLifeGraph.
+
+Music and narration (Meta MusicGen and SeamlessM4T) need an NVIDIA GPU and are not part of this download;
+without them films get on-screen captions. See the README to add them.
+
+Source, license (Apache-2.0) and help: https://github.com/agmonp/muse-life-graph
+The ffmpeg folder holds FFmpeg (https://ffmpeg.org), GPL build by BtbN (https://github.com/BtbN/FFmpeg-Builds);
+its license is in ffmpeg\LICENSE.txt and its source is available from those pages.
