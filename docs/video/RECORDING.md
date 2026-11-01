@@ -1,5 +1,10 @@
 # Your recording lines — revised November 1, 2026
 
+**Recording received and integrated:** no reshoot is required for the current edit. The owner spoke in
+their own words, so the exported version uses the actual recording rather than this planned wording.
+See `OWNER_EDIT.md` for the selected source ranges and final clock; `data/video/demo_with_agmon.mp4` is
+the recorded export. These planned lines remain here for reference.
+
 Record in English, at normal conversational speed. Leave one second of silence before and after each take. Record each paragraph separately, twice. The three camera segments are 12 seconds each; the four voiceovers play over the app and do not extend the three-minute timeline. No need to say the tool names faster to fit: choose a clean take, and the editor trims only the surrounding silence.
 
 ## A — on camera — 0:06–0:18 — 12 seconds

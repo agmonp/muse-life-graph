@@ -1,5 +1,11 @@
 # Demo video script — revised November 1, 2026
 
+**Recorded-owner revision:** the supplied WhatsApp recording is now cut into `data/video/demo_with_agmon.mp4`.
+The authoritative recorded edit is `beats_owner.json`; actual source ranges and revised timing are in
+[OWNER_EDIT.md](OWNER_EDIT.md). It contains 65.23 seconds of the owner's original voice at natural speed,
+with 21.5 seconds of on-camera picture and the rest as voiceover on the real app. The planning table below
+is the earlier recording guide; its camera cards are absent from the recorded-owner export.
+
 The video opens with a real screen recording of making a request. The family film appears full screen only at 2:35, after the product demonstration. All source recordings remain at natural speed; tighter selection and cuts provide the pace.
 
 **180 seconds total: 36 seconds on camera + 119 seconds product demonstration and explanation + 25 seconds final film.** Record four short voiceovers over the screen demonstration; these overlap its existing time and add no runtime. Total planned speaking is about 69 seconds at a comfortable 140–150 words per minute.

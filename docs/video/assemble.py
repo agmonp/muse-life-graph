@@ -40,16 +40,17 @@ def run(cmd: list[str]) -> None:
     subprocess.run([shutil.which("ffmpeg"), "-y", "-v", "error", *cmd], check=True)
 
 
-def caption_filter(text: str | None, dur: float) -> str:
+def caption_filter(text: str | None, dur: float, start: float = 0, end: float | None = None) -> str:
     if not text:
         return ""
     rows = wrap(text, 64, 1680)
     if len(rows) > 2:
         raise ValueError('Shorten the caption: at most two large lines fit safely')
     height = 62 + 80 * len(rows)
-    filters = [f"drawbox=x=0:y=ih-{height}:w=iw:h={height}:color=black@0.88:t=fill"]
+    active = f":enable='gte(t,{start:.4f})*lt(t,{end if end is not None else dur:.4f})'"
+    filters = [f"drawbox=x=0:y=ih-{height}:w=iw:h={height}:color=black@0.88:t=fill{active}"]
     filters += [f"drawtext=fontfile='{FONT_B}':text='{esc(row)}':fontsize=64:fontcolor=white:"
-                f"x=(w-text_w)/2:y=h-{height}+26+{i * 80}:shadowcolor=black:shadowx=2:shadowy=2"
+                f"x=(w-text_w)/2:y=h-{height}+26+{i * 80}:shadowcolor=black:shadowx=2:shadowy=2{active}"
                 for i, row in enumerate(rows)]
     return ',' + ','.join(filters)
 
@@ -59,16 +60,25 @@ def wrap(text: str, size: int, width: int) -> list[str]:
     font = ImageFont.truetype('C:/Windows/Fonts/segoeuib.ttf', size)
     rows = []
     for paragraph in text.split('\n'):
+        paragraph_rows = []
         line = ''
         for word in paragraph.split():
             candidate = f'{line} {word}'.strip()
             if line and font.getlength(candidate) > width:
-                rows.append(line)
+                paragraph_rows.append(line)
                 line = word
             else:
                 line = candidate
         if line:
-            rows.append(line)
+            paragraph_rows.append(line)
+        if len(paragraph_rows) == 2 and font.getlength(paragraph_rows[-1]) < width * 0.35:
+            # Avoid an isolated brand word such as "Wonder" on its own oversized line.
+            words = paragraph.split()
+            options = [(' '.join(words[:i]), ' '.join(words[i:])) for i in range(1, len(words))]
+            fitting = [(a,b) for a,b in options if max(font.getlength(a),font.getlength(b)) <= width]
+            if fitting:
+                paragraph_rows = list(min(fitting, key=lambda p: abs(font.getlength(p[0])-font.getlength(p[1]))))
+        rows.extend(paragraph_rows)
     return rows
 
 
@@ -76,13 +86,27 @@ def screen(beat: dict, media: Path, bed: Path | None, out: Path) -> None:
     src = media / beat["screen"]
     dur = float(beat["dur"])
     crop = f"crop={beat['crop']}," if beat.get("crop") else ""      # "w:h:x:y" of the 1920x1080 capture: a zoom
+    captions = (''.join(caption_filter(c['text'], dur, c['start'], c['end']) for c in beat['captions'])
+                if 'captions' in beat else caption_filter(beat.get('caption'), dur))
     vf = (f"{crop}scale={W}:{H}:force_original_aspect_ratio=decrease,pad={W}:{H}:(ow-iw)/2:(oh-ih)/2:color=black,"
-          f"fps={FPS},format=yuv420p" + caption_filter(beat.get("caption"), dur))
+          f"fps={FPS},format=yuv420p" + captions)
     is_image = src.suffix.lower() in (".png", ".jpg", ".jpeg")
     inp = (["-loop", "1", "-t", f"{dur}", "-i", str(src)] if is_image
            else ["-ss", f"{beat.get('in', 0)}", "-t", f"{dur}", "-i", str(src)])
     sound = beat.get("sound", "bed")
-    if sound == "film" and not is_image:
+    if speech := beat.get('speech'):
+        # Audio and picture are independent: the owner's voice can run over the real app capture.
+        sd = float(speech['duration'])
+        delay = round(float(speech.get('at', 0)) * 48000)
+        if sd + float(speech.get('at', 0)) > dur + 0.001:
+            raise ValueError('Speech would be cut off by this scene')
+        af = (f"afade=t=in:d=0.008,afade=t=out:st={max(0, sd-0.012):.6f}:d=0.012,"
+              f"adelay={delay}S:all=1,apad,atrim=duration={dur},asetpts=PTS-STARTPTS")
+        run([*inp, '-ss', str(speech['in']), '-t', str(sd), '-i', str(media / speech['file']),
+             '-map', '0:v', '-map', '1:a', '-vf', vf, '-af', af,
+             '-c:v', 'libx264', '-preset', 'medium', '-crf', '18', '-c:a', 'aac', '-ar', '48000',
+             '-ac', '2', '-t', str(dur), str(out)])
+    elif sound == "film" and not is_image:
         run([*inp, "-vf", vf, "-af", f"apad,atrim=0:{dur},afade=t=out:st={max(0, dur - 0.5)}:d=0.5",
              "-c:v", "libx264", "-preset", "medium", "-crf", "18", "-c:a", "aac", "-ar", "48000", "-ac", "2",
              "-t", f"{dur}", str(out)])
@@ -139,7 +163,19 @@ def main() -> None:
         lst = Path(tmp) / "list.txt"
         lst.write_text("".join(f"file '{p.as_posix()}'\n" for p in parts), encoding="utf-8")
         Path(a.out).parent.mkdir(parents=True, exist_ok=True)
-        run(["-f", "concat", "-safe", "0", "-i", str(lst), "-c:v", "libx264", "-preset", "medium", "-crf", "18",
+        music = spec.get('music')
+        mixing = []
+        if music:
+            md = float(music['until'])
+            mixing = ['-i', str(media / music['file']), '-filter_complex',
+                      f"[1:a]atrim=duration={md},asetpts=PTS-STARTPTS,volume={music.get('gain', 0.12)},"
+                      f"afade=t=in:d=0.7,afade=t=out:st={md-1}:d=1[bed];"
+                      f'[0:a][bed]amix=inputs=2:duration=first:normalize=0,atrim=duration={t:.6f},'
+                      'asetpts=PTS-STARTPTS[mix]',
+                      '-map', '0:v', '-map', '[mix]']
+        else:
+            mixing = ['-af', f'atrim=duration={t:.6f},asetpts=PTS-STARTPTS']
+        run(["-f", "concat", "-safe", "0", "-i", str(lst), *mixing, "-c:v", "libx264", "-preset", "medium", "-crf", "18",
              "-r", str(FPS), "-fps_mode", "cfr", "-c:a", "aac", "-b:a", "192k", "-t", f'{t:.6f}',
              "-movflags", "+faststart", str(a.out)])  # timeline end; discard only concat/AAC padding
     print(f"wrote {a.out} ({t:.1f} s)")

@@ -1,0 +1,337 @@
+{
+ "bed": null,
+ "beats": [
+  {
+   "screen": "make.mp4",
+   "in": 4,
+   "dur": 6,
+   "sound": "none",
+   "caption": "One sentence. An agentic film crew.",
+   "criterion": "Demo / Impact"
+  },
+  {
+   "record": "A",
+   "dur": 6.5,
+   "criterion": "Impact",
+   "screen": "owner_raw.mp4",
+   "in": 0.4,
+   "speech": {
+    "file": "owner_voice.wav",
+    "in": 0.4,
+    "duration": 6.5,
+    "at": 0
+   },
+   "captions": [
+    {
+     "start": 0.19,
+     "end": 3.23,
+     "text": "I have thousands and thousands of videos and pictures"
+    },
+    {
+     "start": 3.23,
+     "end": 6.5,
+     "text": "that I wanted to analyze locally,"
+    }
+   ]
+  },
+  {
+   "screen": "library.mp4",
+   "in": 2,
+   "dur": 10.1,
+   "caption": "3,648 photos. 69 videos. One life graph.",
+   "criterion": "Impact / Technical depth",
+   "speech": {
+    "file": "owner_voice.wav",
+    "in": 7.03,
+    "duration": 9.87,
+    "at": 0.1
+   },
+   "captions": [
+    {
+     "start": 0.18,
+     "end": 2.48,
+     "text": "understand them, see who are the different people in"
+    },
+    {
+     "start": 2.48,
+     "end": 4.64,
+     "text": "my life and how they connect and to be"
+    },
+    {
+     "start": 4.64,
+     "end": 10.06,
+     "text": "able to generate videos for birthdays and weddings and personal videos"
+    }
+   ]
+  },
+  {
+   "screen": "add.mp4",
+   "in": 3,
+   "dur": 7.5,
+   "caption": "Perceptual deduplication\n3,393 copies set aside",
+   "criterion": "Technical depth"
+  },
+  {
+   "screen": "dated.mp4",
+   "in": 1.5,
+   "dur": 8,
+   "crop": "1480:832:440:0",
+   "caption": "Muse Spark reasons about dates\nSee the evidence behind the estimate",
+   "criterion": "Meta tooling / Technical depth",
+   "speech": {
+    "file": "owner_voice.wav",
+    "in": 21.35,
+    "duration": 6.47,
+    "at": 0.15
+   },
+   "captions": [
+    {
+     "start": 0.23,
+     "end": 3.91,
+     "text": "So a scan has no date and Muse reasons"
+    },
+    {
+     "start": 3.91,
+     "end": 6.73,
+     "text": "from the picture and shows its evidence"
+    },
+    {
+     "start": 6.7700000000000005,
+     "end": 8.0,
+     "text": "Muse Spark reasons about dates\nSee the evidence behind the estimate"
+    }
+   ]
+  },
+  {
+   "screen": "faces.mp4",
+   "in": 9,
+   "dur": 8,
+   "caption": "Identity needs two agreeing signals\nName a group with one answer",
+   "criterion": "Technical depth"
+  },
+  {
+   "screen": "connections.mp4",
+   "in": 8,
+   "dur": 9.5,
+   "caption": "Neo4j + network science\nCircles form and fade over time",
+   "criterion": "Technical depth",
+   "speech": {
+    "file": "owner_voice.wav",
+    "in": 28.55,
+    "duration": 5.0,
+    "at": 0.2
+   },
+   "captions": [
+    {
+     "start": 0.32,
+     "end": 5.3,
+     "text": "faces connect to people and moments to circles forming a life graph"
+    },
+    {
+     "start": 5.3500000000000005,
+     "end": 9.5,
+     "text": "Neo4j + network science\nCircles form and fade over time"
+    }
+   ]
+  },
+  {
+   "screen": "search.mp4",
+   "in": 16,
+   "dur": 8,
+   "caption": "Muse Spark Open on Baseten\nAnswers cite the family evidence",
+   "criterion": "Meta tooling"
+  },
+  {
+   "record": "B",
+   "dur": 7.1,
+   "criterion": "Meta tooling / Technical depth",
+   "screen": "owner_raw.mp4",
+   "in": 36.68,
+   "speech": {
+    "file": "owner_voice.wav",
+    "in": 36.68,
+    "duration": 7.1,
+    "at": 0
+   },
+   "captions": [
+    {
+     "start": 0.13,
+     "end": 3.75,
+     "text": "Then I ask for a film and Muse agents"
+    },
+    {
+     "start": 3.75,
+     "end": 7.07,
+     "text": "research the graph, write the story,"
+    }
+   ]
+  },
+  {
+   "screen": "make.mp4",
+   "in": 1,
+   "dur": 8,
+   "caption": "Producer: Muse Spark\nScreenwriter: Muse Wonder",
+   "criterion": "Meta tooling / Demo",
+   "speech": {
+    "file": "owner_voice.wav",
+    "in": 43.82,
+    "duration": 5.36,
+    "at": 0.2
+   },
+   "captions": [
+    {
+     "start": 0.29,
+     "end": 1.51,
+     "text": "check for the pictures,"
+    },
+    {
+     "start": 1.93,
+     "end": 5.49,
+     "text": "edit them, and the critic watch them and give remarks."
+    },
+    {
+     "start": 5.710000000000001,
+     "end": 8.0,
+     "text": "Producer: Muse Spark\nScreenwriter: Muse Wonder"
+    }
+   ]
+  },
+  {
+   "screen": "make.mp4",
+   "in": 60,
+   "dur": 8,
+   "caption": "The crew pauses for missing identities\nIt asks what only I know",
+   "criterion": "Technical depth / Demo",
+   "crop": "1440:810:400:0"
+  },
+  {
+   "screen": "crew.mp4",
+   "in": 8,
+   "dur": 8.2,
+   "caption": "Picture Checker: Muse Spark Open\nReject pictures that contradict the story",
+   "criterion": "Meta tooling / Technical depth",
+   "speech": {
+    "file": "owner_voice.wav",
+    "in": 49.9,
+    "duration": 8.05,
+    "at": 0.05
+   },
+   "captions": [
+    {
+     "start": 0.14,
+     "end": 4.8,
+     "text": "The pictures checker rejects bad shots and Muse Wonder"
+    },
+    {
+     "start": 4.8,
+     "end": 8.12,
+     "text": "watches the draft and returns timed edit notes."
+    }
+   ]
+  },
+  {
+   "screen": "crew.mp4",
+   "in": 14,
+   "dur": 10.5,
+   "crop": "1440:810:400:100",
+   "caption": "Inspect every agent decision\nSee what changed and why",
+   "criterion": "Technical depth"
+  },
+  {
+   "screen": "film.mp4",
+   "in": 2,
+   "dur": 12,
+   "caption": "Muse Wonder watches the draft\nCritic notes link to video timestamps",
+   "criterion": "Meta tooling / Technical depth",
+   "crop": "1440:810:400:100"
+  },
+  {
+   "screen": "film.mp4",
+   "in": 15,
+   "dur": 9,
+   "caption": "Editor applies the critic's notes\nCompare the first cut and the re-cut",
+   "criterion": "Technical depth / Demo",
+   "crop": "1440:810:400:100"
+  },
+  {
+   "screen": "home.mp4",
+   "in": 4,
+   "dur": 9.2,
+   "caption": "Blind comparison: both orders\nRe-cut won 12 of 16 viewings",
+   "criterion": "Technical depth / Demo",
+   "speech": {
+    "file": "owner_voice.wav",
+    "in": 58.7,
+    "duration": 8.98,
+    "at": 0.1
+   },
+   "captions": [
+    {
+     "start": 0.17,
+     "end": 3.87,
+     "text": "We tested both cuts without labels and in both orders."
+    },
+    {
+     "start": 4.21,
+     "end": 9.05,
+     "text": "Across 8 films, the re-cut won 12 of 16 viewing."
+    }
+   ]
+  },
+  {
+   "screen": "stack_card.png",
+   "dur": 6.5,
+   "caption": "MusicGen score + SeamlessM4T narrator\nMeta open weights on GPU",
+   "criterion": "Meta tooling"
+  },
+  {
+   "screen": "search.mp4",
+   "in": 19,
+   "dur": 5,
+   "caption": "Built during the hackathon\nEarlier names and face references: data only",
+   "criterion": "Theme fit / Technical depth"
+  },
+  {
+   "record": "C",
+   "dur": 7.9,
+   "criterion": "Meta tooling / Impact",
+   "screen": "owner_raw.mp4",
+   "in": 68.65,
+   "speech": {
+    "file": "owner_voice.wav",
+    "in": 68.65,
+    "duration": 7.9,
+    "at": 0
+   },
+   "captions": [
+    {
+     "start": 0.18,
+     "end": 2.52,
+     "text": "Meta models powered the crew,"
+    },
+    {
+     "start": 2.82,
+     "end": 4.82,
+     "text": "including Spark Open on Baseten."
+    },
+    {
+     "start": 5.28,
+     "end": 7.84,
+     "text": "This was built completely during the hackathon."
+    }
+   ]
+  },
+  {
+   "screen": "taya_v2.mp4",
+   "in": 48,
+   "dur": 25,
+   "sound": "film",
+   "criterion": "Demo / Impact"
+  }
+ ],
+ "music": {
+  "file": "demo_music.wav",
+  "until": 155,
+  "gain": 0.16
+ }
+}

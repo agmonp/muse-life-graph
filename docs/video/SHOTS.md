@@ -1,5 +1,8 @@
 # Screen recording cut list — revised November 1, 2026
 
+Recorded-owner export: `data/video/demo_with_agmon.mp4`, using `beats_owner.json` and the actual clock in
+`OWNER_EDIT.md`. The table below is the earlier camera-placeholder version.
+
 Authoritative edit: `beats.json`. Render: `python docs/video/assemble.py --out data/video/draft_v2.mp4`.
 
 1920×1080, 30 fps. Large white 64 px bold captions, actual font-width wrapping, up to two lines on an 88% black lower band. Camera review cards use 64 px white bold text instead of the previous small grey text. Camera takes and all screen captures run at natural speed. The 25-second family film is the final shot. No app code or hosted UI was changed for this edit.

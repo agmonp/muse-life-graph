@@ -1,0 +1,3 @@
+# Optional local transcription runtime for editing the owner's supplied recording.
+# Existing cached Whisper small model required; transcribe_local.py never downloads a model.
+faster-whisper==1.2.1
