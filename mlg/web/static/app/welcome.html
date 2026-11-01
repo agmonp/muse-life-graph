@@ -16,6 +16,7 @@
   --bg: #f6f1ea; --bg-2: #efe8de; --surface: #fffdfa; --ink: #1e1916; --ink-2: #5f564f; --ink-3: #8f857c;
   --line: #e6ddd2; --line-2: #d8ccbf; --accent: #d9542a; --accent-2: #b8431d; --accent-soft: #fbe4d8;
   --accent-ink: #fff; --plum: #6d4c74; --plum-soft: #efe3f1; --ok: #2f7d5b; --ok-soft: #dff1e7; --bad: #c92a2a;
+  --neon: #ff4f1f; --neon-soft: rgba(255, 79, 31, .12); --neon-glow: rgba(255, 79, 31, .38);
   --shadow: 0 1px 2px rgba(60, 40, 20, .06), 0 8px 24px rgba(60, 40, 20, .07);
   --serif: "Fraunces", Georgia, serif; --sans: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
 }
@@ -24,6 +25,7 @@
     --bg: #121010; --bg-2: #1a1716; --surface: #1d1a18; --ink: #f2ece4; --ink-2: #b3a99f; --ink-3: #7f766e;
     --line: #2d2825; --line-2: #3b3430; --accent: #ff7a45; --accent-2: #ff9466; --accent-soft: #3b231a;
     --accent-ink: #1a0d07; --plum: #c7a3cf; --plum-soft: #2e2330; --ok: #5cc493; --ok-soft: #173327; --bad: #ff8a8a;
+    --neon: #ff6a3d; --neon-soft: rgba(255, 106, 61, .14); --neon-glow: rgba(255, 106, 61, .5);
     --shadow: 0 1px 2px rgba(0, 0, 0, .3), 0 8px 24px rgba(0, 0, 0, .3);
   }
 }
@@ -31,6 +33,7 @@
   --bg: #121010; --bg-2: #1a1716; --surface: #1d1a18; --ink: #f2ece4; --ink-2: #b3a99f; --ink-3: #7f766e;
   --line: #2d2825; --line-2: #3b3430; --accent: #ff7a45; --accent-2: #ff9466; --accent-soft: #3b231a;
   --accent-ink: #1a0d07; --plum: #c7a3cf; --plum-soft: #2e2330; --ok: #5cc493; --ok-soft: #173327; --bad: #ff8a8a;
+  --neon: #ff6a3d; --neon-soft: rgba(255, 106, 61, .14); --neon-glow: rgba(255, 106, 61, .5);
   --shadow: 0 1px 2px rgba(0, 0, 0, .3), 0 8px 24px rgba(0, 0, 0, .3);
 }
 * { box-sizing: border-box; }
@@ -61,8 +64,25 @@ h1 em { font-style: italic; color: var(--accent); }
 .btn svg { width: 18px; height: 18px; flex: none; }
 .fine { font-size: 14px; color: var(--ink-3); margin: 12px 0 0; }
 
-.judges { background: var(--surface); border: 1px solid var(--line); border-radius: 20px; padding: 28px; box-shadow: var(--shadow); scroll-margin-top: 16px; }
-.judges .tag { font-size: 13px; font-weight: 600; color: var(--accent); text-transform: uppercase; letter-spacing: .06em; margin: 0 0 8px; }
+/* the judges' door: a neon sign on the card, and a floating sign that points to it while it is off screen */
+.judges-wrap { position: relative; padding-top: 26px; }
+.judges { position: relative; background: var(--surface); border: 2px solid var(--neon); border-radius: 20px; padding: 34px 28px 28px;
+  box-shadow: 0 0 0 6px var(--neon-soft), 0 0 46px var(--neon-glow), var(--shadow); scroll-margin-top: 40px; }
+.neon { --c: var(--neon); display: inline-flex; align-items: center; gap: 10px; font: 800 16px/1 var(--sans);
+  letter-spacing: .14em; text-transform: uppercase; color: #fff7f2; background: #160f0c; border: 2px solid var(--c);
+  padding: 11px 18px; border-radius: 999px; white-space: nowrap; text-decoration: none;
+  text-shadow: 0 0 4px var(--c), 0 0 12px var(--c), 0 0 24px var(--c);
+  box-shadow: 0 0 6px var(--c), 0 0 18px var(--neon-glow), 0 0 40px var(--neon-glow), inset 0 0 10px var(--neon-glow);
+  animation: buzz 4.5s infinite; }
+.judges-wrap > .neon { position: absolute; top: 0; left: 50%; transform: translateX(-50%) rotate(-2deg); z-index: 1; }
+.neon .arrow { display: inline-block; animation: nudge 1.1s ease-in-out infinite; }
+@keyframes buzz { 0%, 100% { opacity: 1; } 91% { opacity: 1; } 92% { opacity: .55; } 93% { opacity: 1; } 95% { opacity: .7; } 96% { opacity: 1; } }
+@keyframes nudge { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(4px); } }
+.judge-float { position: fixed; right: 20px; bottom: 20px; z-index: 20; transition: opacity .25s, transform .25s; }
+.judge-float.away { animation: none; opacity: 0; transform: translateY(16px); pointer-events: none; }   /* the flicker animates opacity too */
+.judge-float .arrow { animation-name: nudge-up; }
+@keyframes nudge-up { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-4px); } }
+@media (prefers-reduced-motion: reduce) { .neon, .neon .arrow { animation: none; } .judge-float { transition: none; } }
 .judges h2 { font: 560 24px/1.2 var(--serif); margin: 0 0 10px; }
 .judges p { color: var(--ink-2); margin: 0 0 14px; font-size: 15px; }
 .judges .where { background: var(--bg); border-radius: 12px; padding: 12px 14px; font-size: 14px; color: var(--ink-2); margin-bottom: 16px; }
@@ -147,8 +167,9 @@ footer a { color: var(--ink-2); }
       <p class="fine">Free and open source. Runs on your own computer with your own Meta API key.</p>
     </div>
 
+    <div class="judges-wrap">
+    <span class="neon" aria-hidden="true">Hackathon judges <span class="arrow">↓</span></span>
     <form class="judges" id="judges" method="post" action="/enter">
-      <p class="tag">For hackathon judges</p>
       <h2>Live demo access</h2>
       <p>The live demo is one real family's photo library, shared with consent, so it is open to judges only.</p>
       <div class="where">The access code is in our submission: <b>Project Description</b>, first lines, under <b>TRY IT</b>.</div>
@@ -157,8 +178,11 @@ footer a { color: var(--ink-2); }
       <button class="btn primary" type="submit">Enter the demo</button>
       {msg}
     </form>
+    </div>
   </div>
 </div>
+
+<a class="neon judge-float away" id="judge-float" href="#judges">Hackathon judges <span class="arrow">↑</span></a>
 
 <section id="video">
   <div class="wrap">
@@ -213,5 +237,22 @@ footer a { color: var(--ink-2); }
     <span>Apache-2.0</span>
   </footer>
 </div>
+<script>
+// the floating sign shows only while the judges' card is off screen, and points the way to it
+(() => {
+  const card = document.getElementById("judges"), sign = document.getElementById("judge-float");
+  const arrow = sign.querySelector(".arrow");
+  // any part of the card above the floating sign's strip counts as seen
+  new IntersectionObserver(([e]) => {
+    sign.classList.toggle("away", e.isIntersecting);
+    arrow.textContent = e.boundingClientRect.top > 0 ? "↓" : "↑";
+  }, { rootMargin: "0px 0px -90px 0px" }).observe(card.parentElement);
+  sign.addEventListener("click", ev => {
+    ev.preventDefault();
+    card.scrollIntoView({ behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth", block: "center" });
+    setTimeout(() => document.getElementById("code").focus({ preventScroll: true }), 450);
+  });
+})();
+</script>
 </body>
 </html>
