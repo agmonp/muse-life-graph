@@ -25,7 +25,7 @@ Build for Your World
 https://github.com/agmonp/muse-life-graph
 
 **3-Minute Demo Video (YouTube)**
-⟨YouTube link, unlisted or public⟩
+https://youtu.be/JX4o7B06awk
 
 ---
 

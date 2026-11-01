@@ -9,7 +9,7 @@ watched and re-cut by a crew of Meta Muse agents from one sentence.**
 |---|---|
 | **Live demo** | https://agmonporat--muse-life-graph-web.us-east.modal.run — one real family's library, shared with consent. The access code is in the submission form (Project Description). Judges can browse, search, ask questions and make a film; names are read-only. |
 | **Run it on your photos** | [Download for Windows](https://github.com/agmonp/muse-life-graph/releases/latest/download/MuseLifeGraph-windows.zip) (your own Meta key, a free graph database; see [below](#run-it-on-your-own-computer)) |
-| **Video (3 min)** | ⟨YouTube link⟩ |
+| **Video (3 min)** | https://youtu.be/JX4o7B06awk |
 | **Measurements** | [docs/EVALS.md](docs/EVALS.md) |
 | **Built for** | Meta Global AI Developer Hackathon (Cerebral Valley), Oct 26 – Nov 4, 2026 |
 
