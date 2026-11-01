@@ -19,7 +19,7 @@ Indie Developer
 Build for Your World
 
 **X post link (Most Viral)**
-⟨paste after posting, see the draft at the bottom⟩
+https://x.com/agmondp/status/2116815391280468008
 
 **Public GitHub Repository**
 https://github.com/agmonp/muse-life-graph
