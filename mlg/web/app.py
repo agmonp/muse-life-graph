@@ -839,6 +839,9 @@ def api_films():
             st = _state(d.name)
         except HTTPException:
             continue
+        # visitors of the hosted demo don't need the owner's old failed attempts; a fresh failure still shows
+        if site.enabled() and st["status"] == "failed" and time.time() - st.get("created", 0) > 86400:
+            continue
         v = st.get("versions", {})
         first = next((m for sc in st.get("scenes") or [] for m in sc.get("moments") or []), None)
         out.append({"id": st["id"], "title": st.get("title") or st["request"][:60], "status": st["status"],
