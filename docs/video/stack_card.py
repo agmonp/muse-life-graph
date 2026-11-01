@@ -1,4 +1,4 @@
-"""The closing card of the demo video (1920x1080): the Meta stack, built in 10 days, the repo.
+"""The Meta tools card for the demo video (1920x1080).
 
     python docs/video/stack_card.py      # -> data/video/stack_card.png
 """
@@ -28,7 +28,7 @@ def main() -> None:
         d.text((W // 2 - 40, y), a, font=font("segoeuib.ttf", 42), fill=(242, 140, 90), anchor="rm")
         d.text((W // 2, y), b, font=font("segoeui.ttf", 38), fill=(225, 218, 210), anchor="lm")
         y += 92
-    d.text((W // 2, 830), "Built in 10 days from an empty repo  ·  runs on your own computer",
+    d.text((W // 2, 830), "Built during the hackathon  ·  started October 26, 2026",
            font=font("segoeui.ttf", 40), fill=(255, 255, 255), anchor="mm")
     d.text((W // 2, 905), "github.com/agmonp/muse-life-graph", font=font("segoeuib.ttf", 40), fill=(242, 140, 90),
            anchor="mm")

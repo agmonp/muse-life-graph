@@ -7,8 +7,8 @@ beats.json is the timeline (see SCRIPT.md): each beat is either
    "crop": "w:h:x:y" (optional zoom into the capture)}
 or an on-camera gap
   {"camera": "<the line you say>", "dur": 15.0}
-Screen beats are scaled to 1920x1080 at 30 fps and get a caption (lower third); camera beats are black with the
-line in small grey type, so the draft reads like the final cut and you can record to the gap lengths. Sound:
+Screen beats are scaled to 1920x1080 at 30 fps and get large, bold, measured-width captions; camera placeholders
+show the recording script in large white bold type. These are review cards, replaced by the owner's takes. Sound:
 "film" keeps the clip's own audio (the film's music and voices), "bed" lays the film's score under the beat at
 a low level, "none" is silence. Paths in beats.json are relative to the folder `--media` (default data/video).
 Needs ffmpeg on PATH. Nothing here is uploaded anywhere.
@@ -21,6 +21,8 @@ import shutil
 import subprocess
 import tempfile
 from pathlib import Path
+
+from PIL import ImageFont
 
 ROOT = Path(__file__).resolve().parents[2]
 FONT = "C\\:/Windows/Fonts/segoeui.ttf"
@@ -41,10 +43,33 @@ def run(cmd: list[str]) -> None:
 def caption_filter(text: str | None, dur: float) -> str:
     if not text:
         return ""
-    fade = f"alpha='if(lt(t,0.4),t/0.4,if(gt(t,{dur - 0.4:.2f}),({dur:.2f}-t)/0.4,1))'"
-    return (f",drawbox=x=0:y=ih-150:w=iw:h=150:color=black@0.45:t=fill:enable='gte(t,0.2)',"
-            f"drawtext=fontfile='{FONT_B}':text='{esc(text)}':fontsize=40:fontcolor=white:"
-            f"x=(w-text_w)/2:y=h-102:{fade}")
+    rows = wrap(text, 64, 1680)
+    if len(rows) > 2:
+        raise ValueError('Shorten the caption: at most two large lines fit safely')
+    height = 62 + 80 * len(rows)
+    filters = [f"drawbox=x=0:y=ih-{height}:w=iw:h={height}:color=black@0.88:t=fill"]
+    filters += [f"drawtext=fontfile='{FONT_B}':text='{esc(row)}':fontsize=64:fontcolor=white:"
+                f"x=(w-text_w)/2:y=h-{height}+26+{i * 80}:shadowcolor=black:shadowx=2:shadowy=2"
+                for i, row in enumerate(rows)]
+    return ',' + ','.join(filters)
+
+
+def wrap(text: str, size: int, width: int) -> list[str]:
+    """Wrap by the actual bold font's width, preserving explicit editorial line breaks."""
+    font = ImageFont.truetype('C:/Windows/Fonts/segoeuib.ttf', size)
+    rows = []
+    for paragraph in text.split('\n'):
+        line = ''
+        for word in paragraph.split():
+            candidate = f'{line} {word}'.strip()
+            if line and font.getlength(candidate) > width:
+                rows.append(line)
+                line = word
+            else:
+                line = candidate
+        if line:
+            rows.append(line)
+    return rows
 
 
 def screen(beat: dict, media: Path, bed: Path | None, out: Path) -> None:
@@ -74,18 +99,15 @@ def screen(beat: dict, media: Path, bed: Path | None, out: Path) -> None:
 def camera(beat: dict, out: Path) -> None:
     dur = float(beat["dur"])
     line = beat["camera"]
-    words, rows, cur = line.split(), [], ""
-    for w in words:   # wrap at ~70 characters
-        if len(cur) + len(w) > 70:
-            rows.append(cur)
-            cur = w
-        else:
-            cur = f"{cur} {w}".strip()
-    rows.append(cur)
-    draws = [f"drawtext=fontfile='{FONT_B}':text='ON CAMERA  {dur:.0f} s':fontsize=30:fontcolor=0x9a9a9a:"
-             f"x=(w-text_w)/2:y=h/2-{40 + 26 * len(rows)}"]
-    draws += [f"drawtext=fontfile='{FONT}':text='{esc(r)}':fontsize=34:fontcolor=0x707070:"
-              f"x=(w-text_w)/2:y=h/2-{26 * len(rows) - 10}+{i * 52}" for i, r in enumerate(rows)]
+    rows = wrap(line, 64, 1660)
+    if len(rows) > 7:
+        raise ValueError('Shorten the on-camera script: seven large lines maximum')
+    y = (H - len(rows) * 88) // 2
+    label = f"RECORD {beat.get('record', '')}  |  ON CAMERA  |  {dur:.0f} SECONDS"
+    draws = [f"drawtext=fontfile='{FONT_B}':text='{esc(label)}':fontsize=38:fontcolor=0xffb27d:"
+             f"x=(w-text_w)/2:y={y - 94}"]
+    draws += [f"drawtext=fontfile='{FONT_B}':text='{esc(r)}':fontsize=64:fontcolor=white:"
+              f"x=(w-text_w)/2:y={y + i * 88}" for i, r in enumerate(rows)]
     run(["-f", "lavfi", "-t", f"{dur}", "-i", f"color=c=black:s={W}x{H}:r={FPS}",
          "-f", "lavfi", "-t", f"{dur}", "-i", "anullsrc=r=48000:cl=stereo",
          "-vf", ",".join(draws) + ",format=yuv420p", "-c:v", "libx264", "-crf", "18", "-c:a", "aac", "-t", f"{dur}",
@@ -98,10 +120,11 @@ def main() -> None:
     ap.add_argument("--media", default=str(ROOT / "data" / "video"))
     ap.add_argument("--out", default=str(ROOT / "data" / "video" / "draft.mp4"))
     a = ap.parse_args()
-    spec = json.loads(Path(a.beats).read_text(encoding="utf-8"))
+    spec = json.loads(Path(a.beats).read_text(encoding="utf-8-sig"))
     media = Path(a.media)
     bed = media / spec["bed"] if spec.get("bed") else None
-    with tempfile.TemporaryDirectory() as tmp:
+    # Keep render intermediates in the ignored media folder, writable by FFmpeg on Windows.
+    with tempfile.TemporaryDirectory(prefix='render-', dir=media.resolve()) as tmp:
         parts = []
         t = 0.0
         for i, beat in enumerate(spec["beats"]):
@@ -117,7 +140,8 @@ def main() -> None:
         lst.write_text("".join(f"file '{p.as_posix()}'\n" for p in parts), encoding="utf-8")
         Path(a.out).parent.mkdir(parents=True, exist_ok=True)
         run(["-f", "concat", "-safe", "0", "-i", str(lst), "-c:v", "libx264", "-preset", "medium", "-crf", "18",
-             "-c:a", "aac", "-b:a", "192k", "-movflags", "+faststart", str(a.out)])
+             "-r", str(FPS), "-fps_mode", "cfr", "-c:a", "aac", "-b:a", "192k", "-t", f'{t:.6f}',
+             "-movflags", "+faststart", str(a.out)])  # timeline end; discard only concat/AAC padding
     print(f"wrote {a.out} ({t:.1f} s)")
 
 

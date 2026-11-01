@@ -46,6 +46,14 @@ def timeline(page: Page, base: str) -> None:
     time.sleep(1)
 
 
+def library(page: Page, base: str) -> None:
+    """Browse actual memory cards for the opening scope shot."""
+    go(page, base, '/memories', 3)
+    page.locator('a[href^="#/memory/"]').first.wait_for()
+    slow_scroll(page, 850, 6)
+    time.sleep(2)
+
+
 def faces(page: Page, base: str) -> None:
     go(page, base, "/faces", 4)
     page.mouse.move(700, 520)
@@ -165,7 +173,7 @@ def make(page: Page, base: str) -> None:
     time.sleep(5)
 
 
-SHOTS = {"home": home, "timeline": timeline, "faces": faces, "add": add, "dated": dated,
+SHOTS = {"home": home, "timeline": timeline, "library": library, "faces": faces, "add": add, "dated": dated,
          "connections": connections, "search": search, "film": film, "crew": crew, "make": make}
 
 

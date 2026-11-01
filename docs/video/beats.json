@@ -1,24 +1,151 @@
 {
- "bed": "taya_v2.mp4",
+ "bed": null,
  "beats": [
-  {"screen": "taya_v2.mp4", "in": 6, "dur": 12, "sound": "film", "caption": "Made by an AI film crew from one sentence"},
-  {"camera": "Like every parent, I have twenty thousand photos on my phone and my Facebook, and I never look at them. Half the faces in the old ones, I can't even name anymore. The memories are there. Nobody can find them, and nobody has time to make anything from them.", "dur": 15},
-  {"screen": "timeline.mp4", "in": 3, "dur": 4, "bed_in": 0, "caption": "One family: 3,648 photos · 69 videos · 1975–2026"},
-  {"screen": "faces.mp4", "in": 2, "dur": 4, "bed_in": 4, "caption": "Thousands of faces nobody has named"},
-  {"screen": "add.mp4", "in": 3, "dur": 8, "bed_in": 8, "caption": "23,742 files fingerprinted · 3,393 copies set aside, 3,029 of them re-encodes"},
-  {"screen": "dated.mp4", "in": 2.5, "dur": 8, "bed_in": 16, "crop": "1480:832:440:0", "caption": "No date on a scan? Muse Spark reads the picture and says why"},
-  {"screen": "faces.mp4", "in": 10, "dur": 7, "bed_in": 24, "caption": "Two keys before a name: a face fingerprint and a second witness"},
-  {"screen": "connections.mp4", "in": 9, "dur": 7, "bed_in": 31, "caption": "Circles of a life, year by year · named by Muse Spark Open"},
-  {"camera": "Then I ask for a film, in one sentence. And a crew of Muse agents makes it, and then watches it, and fixes it.", "dur": 10},
-  {"screen": "make.mp4", "in": 1, "dur": 10, "sound": "none", "caption": "One sentence → Producer (Muse Spark) → Screenwriter (Muse Wonder)"},
-  {"screen": "make.mp4", "in": 52, "dur": 13, "sound": "none", "caption": "It stops to ask what only you know"},
-  {"screen": "crew.mp4", "in": 14, "dur": 10, "sound": "none", "crop": "1440:810:400:100", "caption": "The Picture Checker looks at every picture · Muse Spark Open on Baseten"},
-  {"screen": "film.mp4", "in": 3, "dur": 14, "sound": "none", "caption": "Muse Wonder watches the draft video and puts its notes on the timeline"},
-  {"screen": "home.mp4", "in": 4, "dur": 8, "sound": "none", "caption": "Blind test over all 8 films, both orders: the re-cut won 12 of 16"},
-  {"screen": "search.mp4", "in": 13, "dur": 5, "sound": "none", "caption": "Ask in any language, answered from your pictures on Meta open weights"},
-  {"screen": "taya_v2.mp4", "in": 48, "dur": 25, "sound": "film"},
-  {"camera": "That's the moment I'd never have found in twenty thousand photos.", "dur": 5},
-  {"screen": "stack_card.png", "dur": 7, "sound": "none"},
-  {"camera": "It's all Meta's models, including Muse Spark Open running on open weights. I built it in ten days. And it runs on your own computer: your family's photos never have to leave home.", "dur": 8}
+  {
+   "screen": "make.mp4",
+   "in": 4,
+   "dur": 6,
+   "sound": "none",
+   "caption": "One sentence. An agentic film crew.",
+   "criterion": "Demo / Impact"
+  },
+  {
+   "camera": "I have twenty thousand family photos, but the moments that matter get buried. I built Muse Life Graph to turn those memories into personal films.",
+   "record": "A",
+   "dur": 12,
+   "criterion": "Impact"
+  },
+  {
+   "screen": "library.mp4",
+   "in": 4,
+   "dur": 6,
+   "caption": "3,648 photos. 69 videos. One life graph.",
+   "criterion": "Impact / Technical depth"
+  },
+  {
+   "screen": "add.mp4",
+   "in": 3,
+   "dur": 6,
+   "caption": "Perceptual deduplication\n3,393 copies set aside",
+   "criterion": "Technical depth"
+  },
+  {
+   "screen": "dated.mp4",
+   "in": 1.5,
+   "dur": 8,
+   "crop": "1480:832:440:0",
+   "caption": "Muse Spark reasons about dates\nSee the evidence behind the estimate",
+   "criterion": "Meta tooling / Technical depth",
+   "voiceover": "A scan has no date. Muse reasons from the picture and shows its evidence."
+  },
+  {
+   "screen": "faces.mp4",
+   "in": 9,
+   "dur": 8,
+   "caption": "Identity needs two agreeing signals\nName a group with one answer",
+   "criterion": "Technical depth"
+  },
+  {
+   "screen": "connections.mp4",
+   "in": 8,
+   "dur": 8,
+   "caption": "Neo4j + network science\nCircles form and fade over time",
+   "criterion": "Technical depth",
+   "voiceover": "Faces connect to people, moments and circles, forming a life graph over time."
+  },
+  {
+   "screen": "search.mp4",
+   "in": 16,
+   "dur": 6,
+   "caption": "Muse Spark Open on Baseten\nAnswers cite the family evidence",
+   "criterion": "Meta tooling"
+  },
+  {
+   "camera": "Then I ask for a film. Muse agents research the graph, write the story, check the pictures, and edit. The critic watches the actual video.",
+   "record": "B",
+   "dur": 12,
+   "criterion": "Meta tooling / Technical depth"
+  },
+  {
+   "screen": "make.mp4",
+   "in": 1,
+   "dur": 8,
+   "caption": "Producer: Muse Spark\nScreenwriter: Muse Wonder",
+   "criterion": "Meta tooling / Demo"
+  },
+  {
+   "screen": "make.mp4",
+   "in": 60,
+   "dur": 8,
+   "caption": "The crew pauses for missing identities\nIt asks what only I know",
+   "criterion": "Technical depth / Demo",
+   "crop": "1440:810:400:0"
+  },
+  {
+   "screen": "crew.mp4",
+   "in": 3,
+   "dur": 8,
+   "caption": "Picture Checker: Muse Spark Open\nReject pictures that contradict the story",
+   "criterion": "Meta tooling / Technical depth",
+   "voiceover": "The Picture Checker rejects bad shots. Muse Wonder watches the draft and returns timed edit notes."
+  },
+  {
+   "screen": "crew.mp4",
+   "in": 14,
+   "dur": 8,
+   "crop": "1440:810:400:100",
+   "caption": "Inspect every agent decision\nSee what changed and why",
+   "criterion": "Technical depth"
+  },
+  {
+   "screen": "film.mp4",
+   "in": 2,
+   "dur": 10,
+   "caption": "Muse Wonder watches the draft\nCritic notes link to video timestamps",
+   "criterion": "Meta tooling / Technical depth",
+   "crop": "1440:810:400:100"
+  },
+  {
+   "screen": "film.mp4",
+   "in": 15,
+   "dur": 9,
+   "caption": "Editor applies the critic's notes\nCompare the first cut and the re-cut",
+   "criterion": "Technical depth / Demo",
+   "crop": "1440:810:400:100"
+  },
+  {
+   "screen": "home.mp4",
+   "in": 4,
+   "dur": 9,
+   "caption": "Blind comparison: both orders\nRe-cut won 12 of 16 viewings",
+   "criterion": "Technical depth / Demo",
+   "voiceover": "We tested both cuts without labels, in both orders. Across eight films, the re-cut won twelve of sixteen viewings."
+  },
+  {
+   "screen": "stack_card.png",
+   "dur": 6,
+   "caption": "MusicGen score + SeamlessM4T narrator\nMeta open weights on GPU",
+   "criterion": "Meta tooling"
+  },
+  {
+   "screen": "search.mp4",
+   "in": 19,
+   "dur": 5,
+   "caption": "Built during the hackathon\nEarlier names and face references: data only",
+   "criterion": "Theme fit / Technical depth"
+  },
+  {
+   "camera": "Meta models power the crew, including Spark Open on Baseten. This was built during the hackathon. Here is the film it made for my daughter.",
+   "record": "C",
+   "dur": 12,
+   "criterion": "Meta tooling / Impact"
+  },
+  {
+   "screen": "taya_v2.mp4",
+   "in": 48,
+   "dur": 25,
+   "sound": "film",
+   "criterion": "Demo / Impact"
+  }
  ]
 }
