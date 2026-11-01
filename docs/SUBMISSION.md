@@ -57,7 +57,8 @@ Measured on real data (docs/EVALS.md): in a blind test over all 8 finished films
 Built from an empty repository during the hackathon (first commit 2026-10-26). The demo library is the
 author's own family photos, shared with consent; names and reference faces were imported as data from the
 author's earlier private database. It is designed to run on your own computer, so your family's photos never have to
-leave home.
+leave home: anyone can download it for Windows (link in the README) and use it with their own Meta key and a free
+graph database.
 
 **Live demo:** https://agmonporat--muse-life-graph-web.us-east.modal.run
 **Access code for judges:** ⟨paste the code from data/site_code.txt⟩. Browse, search, ask, and make a film

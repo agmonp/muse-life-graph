@@ -8,6 +8,7 @@ watched and re-cut by a crew of Meta Muse agents from one sentence.**
 | | |
 |---|---|
 | **Live demo** | https://agmonporat--muse-life-graph-web.us-east.modal.run — one real family's library, shared with consent. The access code is in the submission form (Project Description). Judges can browse, search, ask questions and make a film; names are read-only. |
+| **Run it on your photos** | [Download for Windows](https://github.com/agmonp/muse-life-graph/releases/latest/download/MuseLifeGraph-windows.zip) (your own Meta key, a free graph database; see [below](#run-it-on-your-own-computer)) |
 | **Video (3 min)** | ⟨YouTube link⟩ |
 | **Measurements** | [docs/EVALS.md](docs/EVALS.md) |
 | **Built for** | Meta Global AI Developer Hackathon (Cerebral Valley), Oct 26 – Nov 4, 2026 |
@@ -107,7 +108,27 @@ themselves (Meta's API or Baseten, never a `-contributor` model that trains on y
 local Neo4j. Reference faces stay in a git-ignored folder. The live demo is one family's library, shared by
 its owner with consent, behind an access code; visitors cannot rename anyone.
 
-## Run it locally
+## Run it on your own computer
+
+**Windows 10/11: download the app.** Get
+[MuseLifeGraph-windows.zip](https://github.com/agmonp/muse-life-graph/releases/latest/download/MuseLifeGraph-windows.zip)
+from the latest [release](https://github.com/agmonp/muse-life-graph/releases), unzip it and open `MuseLifeGraph.exe`.
+The first screen asks for two things of your own and tests them before saving:
+
+- a **Meta Model API key** ([dev.meta.ai](https://dev.meta.ai)); you pay Meta directly, about $0.006 a photo, and the
+  app shows the estimate before it spends anything;
+- a free **Neo4j AuraDB Free** database ([console.neo4j.io](https://console.neo4j.io)): the address and password from
+  its credentials file;
+- optionally a **Baseten** key, to run search, titles and the Picture Checker on Muse Spark Open.
+
+Keys are saved only in `%LOCALAPPDATA%\MuseLifeGraph\settings.env`, caches and films beside them; photos are read
+where they are. The app is not code-signed yet, so Windows may show "Windows protected your PC": choose *More info*,
+then *Run anyway*. The zip is built in the cloud by [.github/workflows/release.yml](.github/workflows/release.yml)
+from the tagged commit; `packaging/build.ps1` runs the app's self-test and `scripts/check_bundle.py`, which refuses a
+build that contains any key, database, cache or media file. Music and narration need an NVIDIA GPU and are not in
+the download; without them films get on-screen captions.
+
+**From source (Windows, macOS, Linux):**
 
 ```powershell
 git clone https://github.com/agmonp/muse-life-graph; cd muse-life-graph
