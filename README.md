@@ -39,7 +39,8 @@ this code during the hackathon.
    life forming and fading year by year; Muse Spark Open names them.
 4. **Makes a film with an agent crew.** One sentence → Researcher → Producer (Muse Spark) → Screenwriter
    (Muse Wonder) → *pause and ask the owner what only they know* → Picture Checker (looks at every picture)
-   → Editor → Sound (MusicGen score, SeamlessM4T narration) → **Critic watches the rendered draft video**
+   → **Copywriter** (rewrites the narration as one host voice: nostalgic, playful or documentary; code sends
+   back any line that is too long or names something the pictures don't show) → Editor → Sound (MusicGen score, SeamlessM4T narration) → **Critic watches the rendered draft video**
    and gives timestamped notes → Editor re-cuts → **blind test**: Wonder is shown both cuts without being
    told which is the revision.
 5. **Search and ask in any language**, answered only from the moments found, with citations.
@@ -53,7 +54,7 @@ flowchart LR
   E --> D
   D --> F[Network science<br/>backbone · Louvain circles · bridges<br/>names by Muse Spark Open]
   D --> G[Search & ask<br/>Muse Spark Open reads the question<br/>FTS5 ranks · cited answer]
-  D --> H[Film crew agents<br/>Researcher · Producer · Screenwriter<br/>pause-and-ask · Picture Checker · Editor]
+  D --> H[Film crew agents<br/>Researcher · Producer · Screenwriter<br/>pause-and-ask · Picture Checker · Copywriter · Editor]
   H --> I[Critic loop<br/>Muse Wonder watches the draft video<br/>notes → re-cut → blind test]
   H --> J[Sound on a GPU<br/>MusicGen score · SeamlessM4T narration]
   I --> K[Film v2]
@@ -67,7 +68,7 @@ flowchart LR
 | **Muse Spark 1.3** (Meta Model API) | Perception of every photo, video (keyframes + soundtrack) and voice note in strict JSON; Producer; Picture Checker fallback; narration judge in the evals |
 | **Muse Spark Open** `meta-models/muse-spark-open-1026` on **Baseten** (open weights) | Reads every search question (people, years, search words in any language), writes the cited answers, titles all 473 memories, names the circles of people, and runs the Picture Checker on film scenes. The app shows "served by Muse Spark Open on Baseten" where it did the work |
 | **Muse Spark 1.2** | Listens to blessings recorded through a link and picks the film-worthy lines with an English subtitle |
-| **Muse Wonder 1.0** | Screenwriter; Critic that watches the rendered draft *video*; the blind v1-vs-v2 judge |
+| **Muse Wonder 1.0** | Screenwriter; Copywriter (the narration as one host voice); Critic that watches the rendered draft *video*; the blind v1-vs-v2 judge |
 | **Muse Voice Transcribe 1.0** | Hebrew and English speech in videos and blessings, with speaker turns and timestamps |
 | **SAM 3.1**, **Muse Image 1.0** | Adapters (`mlg/muse/sam.py`, `mlg/muse/image.py`) and the day-1 capability probe ([docs/probe_report.md](docs/probe_report.md)); Muse Image made the fictional test family used until 2026-10-27. Neither is in the live pipeline now: faces come from Muse Spark boxes + YuNet |
 | **MusicGen medium** (Meta open weights) | An original score per film, on the owner's GPU or a Modal A10G |
@@ -96,6 +97,7 @@ MusicGen and SeamlessM4T are Meta open weights too, run on the owner's own GPU (
 | Who is in the photo: face fingerprints alone vs the earlier graph's answers (3,508 photos, 7,091 person-photo pairs) | 80% precision at 37% recall (similarity ≥ 0.50 with a 0.10 margin); the app's two-key links: 93% / 60% |
 | Face groups: share of a group's faces that are its main person (known faces); random open groups checked by eye | 97% (upper bound); 4 of 12 one person, 7 mixed, 1 unsure |
 | Blind test, first cut vs critic's re-cut, all 8 finished films, both orders | **re-cut won 12 of 16 viewings** (5 films both times, 1 film lost both, 2 split) |
+| Copywriter's host-voice lines vs the screenwriter's, 8 films, blind (Muse Spark judges, both orders) | **rewritten lines preferred in 16 of 16 viewings**; no unsupported facts flagged in either set ([details](docs/evals/copywriter.md)) |
 | Narration vs picture (separate Muse Spark judge, 35 lines) | 40% match, 51% partly, 9% no; measuring it found a Picture Checker bug, fixed |
 | Time and cost per film (median, hosted demo) | 7.2 min, $3.04 of Muse calls (mostly the Screenwriter reading the whole library) |
 | Muse Spark Open vs Muse Spark API, 30 inputs | Picture Checker: same keep/drop on 33 of 35 pictures; search: same people/years on 10 of 15; same cost; image calls slower (median 15 s vs 6 s) |

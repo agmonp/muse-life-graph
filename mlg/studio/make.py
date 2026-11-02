@@ -3,7 +3,7 @@
     python -m mlg.studio.make "A 60-second film for grandma Ruth's 70th ..." [--dataset real]
 
 Pipeline (each step reports to the crew log the Edit Room shows live):
-  Researcher -> Producer -> Screenwriter -> script check -> Picture Checker -> Editor
+  Researcher -> Producer -> Screenwriter -> script check -> Picture Checker -> Copywriter -> Editor
   -> draft v1 (480p) -> Critic watches v1 -> Editor applies the notes -> v2 (720p) -> Critic scores v2
 Everything lands in data/films/<id>/ (state.json, storyboard.json, edl_v1/v2.json, v1/, v2/)
 and the film is recorded in the graph (Film -> Scene -> Shot -> MediaItem).
@@ -20,7 +20,7 @@ from typing import Callable
 from mlg.config import DATA
 from mlg.graph.db import session
 from mlg.people import roster
-from mlg.studio import ask, checker, critic, edit, render, sound, subtitles
+from mlg.studio import ask, checker, copywriter, critic, edit, render, sound, subtitles
 from mlg.studio.plan import plan
 
 FILMS = DATA / "films"
@@ -154,6 +154,15 @@ def make(request: str, dataset: str = "real", film_id: str | None = None,
                                       for k, v in sb["picture_check"].items()}
         job.say("Picture Checker", (f"{len(notes)} changes" if notes else "every picture fits its scene")
                 + (f" · served by {' + '.join(by)}" if by else ""), "; ".join(notes))
+        try:
+            if copy_ := copywriter.rewrite(sb, [p["name"] for p in roster(dataset)]):
+                job.state["copy"] = copy_
+                job.state["scenes"] = _scenes(sb)
+                job.say("Copywriter", f"{copy_['style']} host voice: rewrote {len(copy_['changes'])} lines",
+                        "; ".join([copy_["why"]] + [f"scene {c['order']}: '{c['before']}' -> '{c['after'] or '(silence)'}'"
+                                                    for c in copy_["changes"]] + copy_["kept"]))
+        except Exception as e:  # noqa: BLE001 - the screenwriter's lines still make a film
+            job.say("Copywriter", "kept the screenwriter's lines", f"{type(e).__name__}: {e}"[:200])
         try:
             if subs := subtitles.translate(sb):
                 job.say("Editor", f"English subtitles for {len(subs) - 1} lines said in another language",

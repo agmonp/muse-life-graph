@@ -102,3 +102,7 @@ perception of the whole library stays on the API.
 ## 7. Narrator
 
 `scripts/voice_eval.py`: 6 narration lines synthesised, transcribed back by Muse Voice Transcribe, word error rate: MMS-TTS 16.5%, **SeamlessM4T v2 5.1%** (the narrator since 2026-10-26).
+
+## 8. Copywriter: host-voice narration vs the screenwriter's lines
+
+`scripts/eval_copywriter.py` on 8 finished films: the Copywriter (Muse Wonder) rewrote each film's narration; Muse Spark, a different model, compared the two sets blind (A/B, both orders) with every scene's evidence. **Rewritten lines preferred in 16 of 16 viewings**; unsupported facts flagged: rewritten 0, original 0; the code guard sent 1 line(s) back to the original. A model judging text, not a person listening; examples in [evals/copywriter.md](evals/copywriter.md).

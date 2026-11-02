@@ -421,6 +421,18 @@ def report(r: dict) -> str:
     L += ["## 7. Narrator", "",
           "`scripts/voice_eval.py`: 6 narration lines synthesised, transcribed back by Muse Voice Transcribe, "
           "word error rate: MMS-TTS 16.5%, **SeamlessM4T v2 5.1%** (the narrator since 2026-10-26).", ""]
+    cw = ROOT / "docs" / "evals" / "copywriter.json"
+    if cw.exists():
+        rows = json.loads(cw.read_text(encoding="utf-8"))
+        views = [w for r in rows for w in r["wins"]]
+        L += ["## 8. Copywriter: host-voice narration vs the screenwriter's lines", "",
+              f"`scripts/eval_copywriter.py` on {len(rows)} finished films: the Copywriter (Muse Wonder) rewrote "
+              "each film's narration; Muse Spark, a different model, compared the two sets blind (A/B, both "
+              f"orders) with every scene's evidence. **Rewritten lines preferred in {views.count('new')} of "
+              f"{len(views)} viewings**; unsupported facts flagged: rewritten "
+              f"{sum(r['invented']['new'] for r in rows)}, original {sum(r['invented']['old'] for r in rows)}; "
+              f"the code guard sent {sum(len(r['kept']) for r in rows)} line(s) back to the original. A model "
+              "judging text, not a person listening; examples in [evals/copywriter.md](evals/copywriter.md).", ""]
     return "\n".join(L)
 
 

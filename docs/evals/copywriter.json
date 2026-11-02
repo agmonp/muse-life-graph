@@ -1,0 +1,368 @@
+[
+ {
+  "film": "film_20261030_104716",
+  "title": "Agmon & Family",
+  "tone": "warm and a little funny",
+  "style": "playful",
+  "why": "Playful suits the warm, a little funny tone and lets the family jokes carry the nostalgia.",
+  "changed": 6,
+  "kept": [],
+  "voiced": 6,
+  "wins": [
+   "new",
+   "new"
+  ],
+  "invented": {
+   "old": 0,
+   "new": 0
+  },
+  "reasons": [
+   "B is warmer and a little funny with a single host voice and arc ('favourite crowd', 'From ruins to this table') vs A's short photo-caption fragments. B is specific to this family using only supported facts - 1978 ruins, 2003 home/Hinda, 2009 waterfall, 2011 chuppah with Agmon and Tamar - and better fills 12s scenes 2 and 4. Both correctly leave scene 6 silent for family singing. Neither invents an unsupported name, place, year or event.",
+   "A is warmer and a little funny with one host voice and arc callbacks ('favourite crowd', 'From ruins to this table'), using evidence-specific details: 1978 ruins + tongue-out, 2003 home with Hinda/singing/reading/bags, 2009 waterfall, 2011 chuppah with Agmon and Tamar, hospital selfie. B is generic photo captions. Both respect silence in 6 and state no unsupported names/places/years/events."
+  ],
+  "old": {
+   "scenes": {
+    "1": "Agmon and family, at home together today.",
+    "2": "Childhood album: boy at ruins, making playful faces.",
+    "3": "Grandparents gathered together at home.",
+    "4": "Sushi at home, waterfalls far away, wheat close by.",
+    "5": "Under the chuppah, then a first hospital selfie.",
+    "6": null,
+    "7": "Everyone together at home, still around one table."
+   },
+   "closing_card": "Agmon & Family — From childhood to today"
+  },
+  "new": {
+   "scenes": {
+    "1": "This is Agmon — and his favourite crowd, at home.",
+    "2": "It started at ancient ruins in 1978 — tongue out, face pulled, already performing.",
+    "3": "At home in 2003, Hinda held court — singing, reading, and bags everywhere.",
+    "4": "Sushi at home, a waterfall in 2009, then wheat fields — children happily hitched along.",
+    "5": "Agmon and Tamar under the chuppah in 2011 — then a newborn, and a hospital selfie.",
+    "6": null,
+    "7": "From ruins to this table — Agmon's favourite crowd just keeps getting bigger."
+   },
+   "closing_card": "Agmon & Family — still around one table"
+  }
+ },
+ {
+  "film": "film_20261030_110354",
+  "title": "Happy Birthday Taya!",
+  "tone": "warm and joyful",
+  "style": "nostalgic",
+  "why": "The film looks back from Taya as a baby to Taya surrounded by family today, so a warm, gentle, nostalgic voice fits the birthday occasion.",
+  "changed": 4,
+  "kept": [],
+  "voiced": 4,
+  "wins": [
+   "new",
+   "new"
+  ],
+  "invented": {
+   "old": 0,
+   "new": 0
+  },
+  "reasons": [
+   "B is more moving and specific for warm joyful birthday while A is generic. B names what is seen: pink trim/purple pacifier/smile in scene 2, striped blanket/garden/red balloon in scene 3, and bookends home-full-of-you for scenes 1 and 5. It also fits length better, especially the 12s scene 3 where A's 6 words would leave dead air. Both correctly keep scene 4 silent for the spoken wish.",
+   "A is more moving and specific to this family while B is generic captions. Scene 2 names pink trim, purple pacifier, smile and Scene 3 names striped blanket, garden, red balloon, directly matching evidence, versus B's 'tiny beginning' and 'surrounded, held'. A also arcs as one host from 'home is full of you' to 'home is still full of you' and fits 8s/12s lengths better. Both correctly use silence in Scene 4 to let the spoken Hebrew wish carry the peak. Neither invents unsupported names/places/years/events."
+  ],
+  "old": {
+   "scenes": {
+    "1": "Happy birthday, Taya — today we celebrate you.",
+    "2": "It began with this tiny, smiling beginning.",
+    "3": "Surrounded, held, and growing all along.",
+    "4": null,
+    "5": "With love, always — happy birthday, Taya."
+   },
+   "closing_card": "Happy Birthday Taya!"
+  },
+  "new": {
+   "scenes": {
+    "1": "Happy birthday, Taya — today, home is full of you.",
+    "2": "It started small — pink trim, a purple pacifier, that smile.",
+    "3": "On a striped blanket, in the garden, with a red balloon — always held.",
+    "4": null,
+    "5": "Home is still full of you, Taya — happy birthday, with love."
+   },
+   "closing_card": "With love, always — happy birthday, Taya"
+  }
+ },
+ {
+  "film": "film_20261030_160632",
+  "title": "My 2026",
+  "tone": "warm and reflective",
+  "style": "nostalgic",
+  "why": "Warm and reflective suits a gentle, wistful look back at home, remembrance, and family gathered around the table.",
+  "changed": 4,
+  "kept": [],
+  "voiced": 4,
+  "wins": [
+   "new",
+   "new"
+  ],
+  "invented": {
+   "old": 0,
+   "new": 0
+  },
+  "reasons": [
+   "B is warmer and more specific to this family while A reads as generic captions. B names Agmon with baby in lap, cemetery-to-lunch arc, and crowns/gold-table/props, matching evidence for scenes 1,2,5, and closes the table theme. Both correctly stay silent for scene 6 Shabbat greeting and invent no unsupported names/places/years/events, but B better fills 8-16s lengths with one host voice.",
+   "For warm-reflective tone, A is more moving and specific while staying supported: Agmon with baby in lap, cemetery then lunch, crowns/gold/props, and still-close arc. B says the same beats generically. Both correctly use silence for scene 6 to let 'Shabbat Shalom' carry, but A fits the 8s pictures better and sounds like one host."
+  ],
+  "old": {
+   "scenes": {
+    "1": "January begins close, at home.",
+    "2": "February: remembering, then gathering again.",
+    "3": null,
+    "4": null,
+    "5": "Late April, dressed up around the table.",
+    "6": null,
+    "7": "And still, all of us at the table."
+   },
+   "closing_card": "My 2026"
+  },
+  "new": {
+   "scenes": {
+    "1": "2026 starts close — Agmon, a baby in his lap, everyone nearby.",
+    "2": "February begins at the cemetery, then gathers again around lunch.",
+    "3": null,
+    "4": null,
+    "5": "Late April puts on crowns — gold on the table, props in hand.",
+    "6": null,
+    "7": "Still close, still home — all of us at the table."
+   },
+   "closing_card": "My 2026 — around the table"
+  }
+ },
+ {
+  "film": "film_20261030_161021",
+  "title": "Happy Birthday, Boaz!",
+  "tone": "warm and a little funny",
+  "style": "playful",
+  "why": "Playful fits the warm, funny birthday tone and Boaz's grin, pools, sparklers, and family celebrations.",
+  "changed": 6,
+  "kept": [],
+  "voiced": 6,
+  "wins": [
+   "new",
+   "new"
+  ],
+  "invented": {
+   "old": 0,
+   "new": 0
+  },
+  "reasons": [
+   "B is warmer and a little funny vs A's flat photo-captions, sounds like one birthday host, and fits length. For 12s scenes 2 and 6, A's 5-6 word lines leave dead air while B sustains. B is specific to evidence: 1985 pool leap, twice the glow for two sparkler desserts, dogs and all for the swing photo. Both correctly leave scene 4 null for Boaz's own voice. No unsupported name/place/year/event in either set.",
+   "A is warmer and a little funny with one host voice vs B which copies scene intents as captions. A uses specific supported details - straw hat, 1985 pool leap, dogs - fitting pictures, and both correctly stay silent for Boaz's own voice in scene 4 with no unsupported facts."
+  ],
+  "old": {
+   "scenes": {
+    "1": "Happy birthday, Boaz — straw hat, sunshine, and that grin.",
+    "2": "First, a leap into the pool.",
+    "3": "With friends at night and at home, arms around shoulders.",
+    "4": null,
+    "5": "Reading together, then sunshine in the garden.",
+    "6": "Sparklers over dessert — make a wish, Boaz.",
+    "7": "Everyone together on the garden swing and indoors."
+   },
+   "closing_card": "Happy Birthday, Boaz!"
+  },
+  "new": {
+   "scenes": {
+    "1": "Happy birthday, Boaz — straw hat, sunshine, and that grin we cannot resist.",
+    "2": "It started with a pool leap in 1985 — some habits never dry off.",
+    "3": "Friends, late nights, arms around shoulders — Boaz has always collected people beautifully.",
+    "4": null,
+    "5": "Quiet stories on the sofa, a toddler in the sun — that is his soft spot.",
+    "6": "Sparklers over dessert, twice the glow — go on, Boaz, make that wish.",
+    "7": "Everyone squeezed together, dogs and all — still grinning, still so loved, Boaz."
+   },
+   "closing_card": "Happy birthday, Boaz — keep grinning!"
+  }
+ },
+ {
+  "film": "film_20261030_165705",
+  "title": "Taya Growing Up",
+  "tone": "tender then joyful and funny",
+  "style": "nostalgic",
+  "why": "Warm and tender at the start, growing more joyful as Taya does, with the final line returning to home.",
+  "changed": 4,
+  "kept": [],
+  "voiced": 4,
+  "wins": [
+   "new",
+   "new"
+  ],
+  "invented": {
+   "old": 0,
+   "new": 0
+  },
+  "reasons": [
+   "B is more specific to this family's pictures and more moving: smiling at home, fries, laughing on shoulders, sand through fingers, white dress for first grade, and a closing callback. A is generic photo-caption listing. Both correctly stay silent for the music show and birthday wishes, but B sounds like one host and fits each scene's evidence and length.",
+   "A is more tender then joyful and specific to the evidence where B is generic captions. A1 keeps smiling newborn at home, A3 keeps fries and laughing on shoulders vs B's snacks/carried everywhere, A4 keeps sand through fingers and white dress for first grade vs B's sand/swings/first grade, A7 closes the arc brand-new at home to still home together vs B's short tag. Both correctly stay silent for the music show and birthday voices and invent no names/places/years, but A sounds like one host and fills 8-12s scenes better."
+  ],
+  "old": {
+   "scenes": {
+    "1": "Taya, from her very first days at home.",
+    "2": null,
+    "3": "Swings, snacks, and being carried everywhere.",
+    "4": "Sand, swings, then off to first grade.",
+    "5": null,
+    "6": null,
+    "7": "And still, all of us together."
+   },
+   "closing_card": "From baby to today"
+  },
+  "new": {
+   "scenes": {
+    "1": "This is Taya — home, brand new, and already smiling.",
+    "2": null,
+    "3": "Then came swings, fries, and laughing high up on shoulders.",
+    "4": "Sand through small fingers, more swings — then a white dress for first grade.",
+    "5": null,
+    "6": null,
+    "7": "From brand new at home — to today, still home, still all together."
+   },
+   "closing_card": "From baby to today — always together."
+  }
+ },
+ {
+  "film": "film_20261030_165708",
+  "title": "Tamar & Agmon",
+  "tone": "warm and intimate",
+  "style": "nostalgic",
+  "why": "The opening hook in 2010, the flower-crown middle, and the living-room-floor finish build the arc. The final line callbacks 'side by side'. The closing card keeps that same callback short, warm, and in Tamar and Agmon's own names.",
+  "changed": 3,
+  "kept": [
+   "scene 7: kept the old line - the new one names July, which this scene's pictures don't show"
+  ],
+  "voiced": 4,
+  "wins": [
+   "new",
+   "new"
+  ],
+  "invented": {
+   "old": 0,
+   "new": 0
+  },
+  "reasons": [
+   "B is warmer and more intimate for an anniversary: it names Tamar and Agmon, links scenes with 'side by side...still side by side', and uses specific evidence (late night, sunshine/flower crown/fedora, five on the floor). A reads as short photo captions, less like one host and under-fills 9-sec scenes.",
+   "For a warm intimate anniversary, A is more moving and host-like: it names Tamar and Agmon, recalls specific supported details like late-night NYE 2010 and Agmon in a fedora, and closes by addressing them as five together, while B reads as short photo captions that under-fill 9-second scenes. No unsupported names/places/years/events in either set."
+  ],
+  "old": {
+   "scenes": {
+    "1": null,
+    "2": "New Year's Eve 2010, smiling side by side.",
+    "3": null,
+    "4": "In white, with a flower crown, outdoors.",
+    "5": null,
+    "6": null,
+    "7": "At the hospital, then home with their newborn.",
+    "8": "On the living-room floor, all together at home."
+   },
+   "closing_card": "Tamar & Agmon"
+  },
+  "new": {
+   "scenes": {
+    "1": null,
+    "2": "It starts late on New Year's Eve 2010 — Tamar and Agmon, side by side, smiling.",
+    "3": null,
+    "4": "Then white, a flower crown, sunshine — and Agmon in a fedora, right beside her.",
+    "5": null,
+    "6": null,
+    "7": "At the hospital, then home with their newborn.",
+    "8": "Still side by side on the living-room floor — now five of you, home together."
+   },
+   "closing_card": "Tamar & Agmon — still side by side"
+  }
+ },
+ {
+  "film": "film_20261030_171616",
+  "title": "Taya Growing Up",
+  "tone": "tender then joyful and funny",
+  "style": "nostalgic",
+  "why": "Warm and tender at the start, growing more joyful as Taya does, with the final line returning to home.",
+  "changed": 4,
+  "kept": [],
+  "voiced": 4,
+  "wins": [
+   "new",
+   "new"
+  ],
+  "invented": {
+   "old": 0,
+   "new": 0
+  },
+  "reasons": [
+   "B is more tender then joyful and more specific to the evidence: smiling newborn at home, fries and laughing on shoulders, sand through fingers and white dress for first grade, and a closing arc back to home together. A is generic photo captions. Both correctly stay silent for the music show and birthday wishes, with no invented names/places/years/events.",
+   "A is more moving and specific while fitting pictures: smiling newborn at home, fries + laughing on shoulders, sand through fingers + white dress for first grade, and home-to-home closing arc sounds like one host. B is generic captions ('snacks', 'being carried everywhere', 'off to first grade'). Both correctly stay silent for music show and birthday voices."
+  ],
+  "old": {
+   "scenes": {
+    "1": "Taya, from her very first days at home.",
+    "2": null,
+    "3": "Swings, snacks, and being carried everywhere.",
+    "4": "Sand, swings, then off to first grade.",
+    "5": null,
+    "6": null,
+    "7": "And still, all of us together."
+   },
+   "closing_card": "From baby to today"
+  },
+  "new": {
+   "scenes": {
+    "1": "This is Taya — home, brand new, and already smiling.",
+    "2": null,
+    "3": "Then came swings, fries, and laughing high up on shoulders.",
+    "4": "Sand through small fingers, more swings — then a white dress for first grade.",
+    "5": null,
+    "6": null,
+    "7": "From brand new at home — to today, still home, still all together."
+   },
+   "closing_card": "From baby to today — always together."
+  }
+ },
+ {
+  "film": "film_20261031_145924",
+  "title": "Happy Birthday, Adam!",
+  "tone": "warm and a little funny",
+  "style": "playful",
+  "why": "The brief asks for warm and a little funny for Adam's birthday, so a playful family-teasing voice fits the joyful cuddles and laughter.",
+  "changed": 5,
+  "kept": [],
+  "voiced": 5,
+  "wins": [
+   "new",
+   "new"
+  ],
+  "invented": {
+   "old": 0,
+   "new": 0
+  },
+  "reasons": [
+   "B is warmer and a little funny as brief asks, while A just repeats the intents as short captions. B is specific to pictures: couch cuddle, 2014 newborn, blue swing laughing, golden wheat carried, happy pile for large gathering, and sounds like one host. Both leave the singing video silent (null), and neither invents unsupported names/places/years.",
+   "A is warm and a little funny for a birthday while B just repeats the intent lines as captions. A uses picture-specific details from evidence - couch cuddle, 2014 newborn, blue swing laughing, golden wheat carried, happy pile - in one consistent host voice with varied length, while B is generic and flat. Both stay within supported facts: Taya = תאיה פורת, 2014 dates, blue swing, wheat field, couch are all in evidence."
+  ],
+  "old": {
+   "scenes": {
+    "1": "Happy birthday, Adam — this is you, right here.",
+    "2": "A newborn, home, and everyone leaning in close.",
+    "3": "You and Taya, sharing one swing.",
+    "4": "Carried through the golden wheat, close to Dad.",
+    "5": null,
+    "6": "And here you all are, together."
+   },
+   "closing_card": "Happy Birthday, Adam!"
+  },
+  "new": {
+   "scenes": {
+    "1": "Happy birthday, Adam — starting right where you belong, in the couch cuddle.",
+    "2": "Back in 2014, a newborn arrived, and everyone leaned in close.",
+    "3": "You and Taya, squeezed onto one blue swing — and absolutely cracking up.",
+    "4": "Through the golden wheat you went, carried high and held close.",
+    "5": null,
+    "6": "And here you all are — more people, same happy pile."
+   },
+   "closing_card": "Happy birthday, Adam!"
+  }
+ }
+]
