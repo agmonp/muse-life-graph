@@ -552,15 +552,40 @@ afterRender.person = () => {
 
 /* ---------------- connections ---------------- */
 const CIRCLE_COLORS = ['#d9542a', '#6d4c74', '#2f7d5b', '#3b5bdb', '#b7791f', '#c2255c', '#0b7285', '#5c940d', '#862e9c', '#e8590c', '#1864ab', '#5f3dc4'];
+// spheres keep contexts apart: family, friends and work don't have to share one picture
+const SPHERES = [['all', 'All'], ['family', 'Family'], ['friends', 'Friends'], ['work', 'Work'], ['other', 'Other']];
+const SPHERE_WORDS = {
+  family: /famil|משפח|cousin|בני דוד|kids|children|ילד|parent|הורים|grand|סבא|סבתא|in-law|sibling|אחים|אחיות|household/i,
+  work: /work|office|colleag|team|army|צבא|עבוד|job|startup|company|unit|יחיד|business|עסק|clinic|מרפא/i,
+  friends: /friend|חבר|crew|gang|trip|טיול|wedding|חתונ|school|class|תיכון|universit|neighbo|שכנ|poker|club|night|party/i,
+};
+const guessSphere = name => Object.keys(SPHERE_WORDS).find(k => SPHERE_WORDS[k].test(name)) || 'other';
+const FADE_YEARS = 5;          // no picture together for longer than this and a person recedes
+const PREFS_KEY = 'mlg.graphPrefs';
+// the owner's reading of the map is saved on their computer; on the demo site a visitor's stays in their browser
+async function loadPrefs() {
+  let p = {};
+  if (OV?.site) { try { p = JSON.parse(localStorage.getItem(PREFS_KEY) || '{}'); } catch { p = {}; } }
+  else p = await api('/api/graph/prefs').catch(() => ({}));
+  return {people: p.people || {}, circles: p.circles || {}};
+}
+async function savePrefs(p) {
+  if (OV?.site) { try { localStorage.setItem(PREFS_KEY, JSON.stringify(p)); } catch { /* private window */ } return; }
+  await api('/api/graph/prefs', p).catch(e => toast(`Couldn't save: ${e.message}`));
+}
+
 async function connections() {
   return `<div class="phead"><div><div class="eyebrow">Connections</div><h1>The circles of your life</h1>
-      <p>Each island is a circle — your own groups from the Life Graph, or one Muse found and named. People who are photographed
-      together are close; the lines are the ties that stand out. Click anyone to see who they are with.</p></div></div>
+      <p>You are in the middle; each bubble is a circle of people around you. Open one to see who is in it, hover to see
+      how circles connect, and drag a person into the circle where they belong.</p></div></div>
     <div class="netwrap"><div class="graphwrap" id="gw"><svg id="gsvg" aria-label="Map of the people in your life"></svg>
       <div class="gtools"><button class="iconbtn" data-z="in" aria-label="Zoom in">${ic('plus')}</button>
         <button class="iconbtn" data-z="out" aria-label="Zoom out"><svg class="icon"><path d="M5 12h14"/></svg></button>
         <button class="iconbtn" data-z="fit" aria-label="Fit">${ic('graph')}</button>
-        <label class="toggle small"><input type="checkbox" id="gme">My ties</label></div>
+        <label class="toggle small"><input type="checkbox" id="gall">Everyone</label>
+        <label class="toggle small"><input type="checkbox" id="gme">My ties</label>
+        <label class="toggle small" title="People with no picture together in ${FADE_YEARS}+ years recede"><input type="checkbox" id="gfade" checked>Fade old ties</label></div>
+      <div class="gmenu card" id="gmenu" hidden role="menu"></div>
       <div class="glegend" id="glegend"></div>
       <div class="timebar" id="timebar" hidden>
         <button class="iconbtn" id="tplay" aria-label="Play the years">${ic('play')}</button>
@@ -577,16 +602,53 @@ function linkText(t) {
 }
 const yrs = t => t.from ? (t.from === t.to ? t.from : `${t.from}–${t.to}`) : '';
 afterRender.connections = async (_, params) => {
-  const [g, ins] = await Promise.all([api('/api/graph'), api('/api/insights')]);
-  const svg = $('#gsvg'), wrap = $('#gw'), side = $('#netside');
+  const [g, ins, P, years] = await Promise.all([api('/api/graph'), api('/api/insights'), loadPrefs(),
+                                                api('/api/graph/years').catch(() => null)]);
+  const svg = $('#gsvg'), wrap = $('#gw'), side = $('#netside'), menu = $('#gmenu');
   if (!g.nodes.length) { wrap.innerHTML = '<div class="empty"><h2>No people yet</h2><p><a href="#/faces">Name a few faces</a> and the map appears.</p></div>'; return; }
   const color = {}; g.circles.slice().sort((a, b) => b.size - a.size).forEach((c, i) => { color[c.name] = CIRCLE_COLORS[i % CIRCLE_COLORS.length]; });
   const byId = Object.fromEntries(g.nodes.map(n => [n.id, n]));
+  const circ = Object.fromEntries(g.circles.map(c => [c.name, c]));
+  const owner = g.nodes.find(n => n.owner);
+  const myTies = owner ? (await api(`/api/ties/${enc(owner.id)}`).catch(() => ({ties: []}))).ties : [];
+
+  // ---- the owner's reading: moves, closeness, hidden / muted / in memory, circle names and spheres ----
+  const pp = id => P.people[id] || (P.people[id] = {});
+  const stateOf = id => P.people[id]?.state || '';
+  const circleOf = n => (P.people[n.id]?.circle && circ[P.people[n.id].circle]) ? P.people[n.id].circle : n.circle;
+  const cname = c => P.circles[c]?.name || c;
+  const sphereOf = c => P.circles[c]?.sphere || guessSphere(c);
+  const lastYear = {};
+  for (const [pid, ys] of Object.entries(years?.people || {})) lastYear[pid] = Math.max(...Object.keys(ys).map(Number));
+  const maxYear = years?.years?.length ? +years.years[years.years.length - 1] : 0;
+  const strengths = myTies.map(t => t.strength).sort((a, b) => a - b);
+  const autoClose = id => { const t = myTies.find(x => x.id === id); if (!t || !strengths.length) return 1;
+    const rank = strengths.filter(s => s <= t.strength).length / strengths.length; return Math.max(1, Math.ceil(rank * 5)); };
+  const closeness = id => P.people[id]?.close || autoClose(id);
+  const open = new Set();
+  let everyone = g.circles.length <= 2, fadeOn = true, sphere = 'all';
+  const faded = n => fadeOn && !n.owner && stateOf(n.id) !== 'memorial' && lastYear[n.id] && maxYear - lastYear[n.id] > FADE_YEARS;
+  const posOf = n => {
+    if (n.owner) return [n.x, n.y];
+    const m = P.people[n.id], c = circ[circleOf(n)];
+    let x = n.x, y = n.y;
+    if (m?.circle && c && m.dx !== undefined) { x = c.x + m.dx; y = c.y + m.dy; }
+    if (faded(n) && c) {   // drift toward the edge of the circle
+      const dx = x - c.x, dy = y - c.y, d = Math.hypot(dx, dy);
+      if (d > 1) { const to = Math.min(Math.max(0, c.r - n.r - 6), d * 1.18 + 10); x = c.x + dx / d * to; y = c.y + dy / d * to; }
+    }
+    return [x, y];
+  };
+  const members = c => g.nodes.filter(n => !n.owner && circleOf(n) === c && stateOf(n.id) !== 'hidden');
+  const inSphere = c => sphere === 'all' || sphereOf(c) === sphere;
+  const shown = n => n.owner || (stateOf(n.id) !== 'hidden' && inSphere(circleOf(n)) && (everyone || open.has(circleOf(n))));
+
+  // ---- the map ----
   const ex = [...g.nodes.map(n => [n.x - n.r, n.y - n.r, n.x + n.r, n.y + n.r + 18]), ...g.circles.map(c => [c.x - c.r, c.y - c.r - 30, c.x + c.r, c.y + c.r])];
   const X0 = Math.min(...ex.map(e => e[0])) - 30, Y0 = Math.min(...ex.map(e => e[1])) - 30;
   const X1 = Math.max(...ex.map(e => e[2])) + 30, Y1 = Math.max(...ex.map(e => e[3])) + 30;
   if (innerWidth < 980) {   // narrow screens: the box takes the map's own proportions, no empty bands
-    wrap.style.height = `${Math.round(Math.max(320, Math.min(innerHeight * .7, wrap.clientWidth * (Y1 - Y0) / (X1 - X0) + 200)))}px`;   // + the zoom tools and the year bar
+    wrap.style.height = `${Math.round(Math.max(320, Math.min(innerHeight * .7, wrap.clientWidth * (Y1 - Y0) / (X1 - X0) + 200)))}px`;
     wrap.style.minHeight = '0';
   }
   const W = wrap.clientWidth, H = wrap.clientHeight;
@@ -594,71 +656,258 @@ afterRender.connections = async (_, params) => {
   const TOP = 58, BOTTOM = 120;   // screen pixels kept free for the zoom tools and the year bar
   const fit = () => { const k = Math.min(W / (X1 - X0), (H - TOP - BOTTOM) / (Y1 - Y0)); view = {k, x: W / 2 - k * (X0 + X1) / 2, y: TOP + (H - TOP - BOTTOM) / 2 - k * (Y0 + Y1) / 2}; };
   fit();
-  const maxW = Math.max(...g.edges.filter(e => !e.owner).map(e => e.w), 0.01);
-  const edge = (e, cls) => { const a = byId[e.a], b = byId[e.b]; if (!a || !b) return '';
-    const inside = e.inside && !e.owner;
-    return `<line class="gedge ${cls}" data-a="${esc(e.a)}" data-b="${esc(e.b)}" x1="${a.x}" y1="${a.y}" x2="${b.x}" y2="${b.y}"
-      stroke="${inside ? color[a.circle] : 'var(--ink-3)'}" stroke-width="${(1 + 6 * e.w / maxW).toFixed(1)}"
-      ${inside ? '' : 'stroke-dasharray="3 6"'}><title>${esc(a.name)} & ${esc(b.name)}: ${linkText(e)}</title></line>`; };
+  const peers = g.edges.filter(e => !e.owner && byId[e.a] && byId[e.b]);
+  const maxW = Math.max(...peers.map(e => e.w), 0.01);
   svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
-  svg.innerHTML = `<defs>${g.nodes.map((n, i) => `<clipPath id="c${i}"><circle r="${n.r}"/></clipPath>`).join('')}</defs><g id="gv">
+  svg.innerHTML = `<defs><clipPath id="cround" clipPathUnits="objectBoundingBox"><circle cx=".5" cy=".5" r=".5"/></clipPath></defs><g id="gv">
+    <g class="spokes"></g><g class="bundles"></g>
     <g class="islands">${g.circles.map(c => `<g class="island" data-circle="${esc(c.name)}">
-      <circle cx="${c.x}" cy="${c.y}" r="${c.r}" fill="${color[c.name]}" fill-opacity=".07" stroke="${color[c.name]}" stroke-opacity=".25" stroke-width="2"/>
-      <text x="${c.x}" y="${c.y - c.r - 10}" text-anchor="middle" fill="${color[c.name]}" style="font-size:${Math.max(15, c.r / 7).toFixed(0)}px">${esc(c.name)} · ${c.size}</text></g>`).join('')}</g>
-    <g class="edges">${g.edges.filter(e => !e.owner).map(e => edge(e, '')).join('')}</g>
-    <g class="edges owner-edges" style="display:none">${g.edges.filter(e => e.owner).map(e => edge(e, 'own')).join('')}</g>
+      <circle class="ring" cx="${c.x}" cy="${c.y}" r="${c.r}" fill="${color[c.name]}" stroke="${color[c.name]}"/>
+      <g class="bubble" transform="translate(${c.x},${c.y})"></g>
+      <g class="ilabel"><rect/><text text-anchor="middle" dir="auto" fill="${color[c.name]}" style="font-size:${Math.max(15, c.r / 7).toFixed(0)}px"></text></g></g>`).join('')}</g>
+    <g class="edges">${peers.map(e => `<line class="gedge" data-a="${esc(e.a)}" data-b="${esc(e.b)}" stroke-width="${(1 + 6 * e.w / maxW).toFixed(1)}"><title>${esc(byId[e.a].name)} & ${esc(byId[e.b].name)}: ${linkText(e)}</title></line>`).join('')}</g>
+    <g class="edges owner-edges" style="display:none">${g.edges.filter(e => e.owner && byId[e.b]).map(e => `<line class="gedge own" data-a="${esc(e.a)}" data-b="${esc(e.b)}" stroke="var(--accent)"><title>${esc(byId[e.b].name)}: ${linkText(e)}</title></line>`).join('')}</g>
     <g class="egos"></g>
-    <g class="nodes">${g.nodes.map((n, i) => `<g class="gnode ${n.owner ? 'owner' : ''} ${n.bridge >= 0.04 ? 'bridge' : ''} ${n.r >= 24 || n.owner ? 'big' : ''}"
-        data-id="${esc(n.id)}" transform="translate(${n.x},${n.y})">
-      <circle r="${n.r + 3}" fill="${n.owner ? 'var(--accent)' : color[n.circle] || 'var(--ink-3)'}"/>
-      <circle r="${n.r}" fill="var(--bg-2)"/><image href="${ref(n.id)}" data-name="${esc(n.name)}" x="${-n.r}" y="${-n.r}" width="${2 * n.r}" height="${2 * n.r}" clip-path="url(#c${i})" preserveAspectRatio="xMidYMid slice"/>
+    <g class="nodes">${g.nodes.map(n => `<g class="gnode ${n.owner ? 'owner' : ''} ${n.bridge >= 0.04 ? 'bridge' : ''} ${n.r >= 24 || n.owner ? 'big' : ''}" data-id="${esc(n.id)}">
+      ${n.owner ? `<circle class="halo" r="${n.r + 16}"/>` : ''}
+      <circle class="disc" r="${n.r + 3}"/><circle class="memo-ring" r="${n.r + 7}"/>
+      <circle r="${n.r}" fill="var(--bg-2)"/><image href="${ref(n.id)}" data-name="${esc(n.name)}" x="${-n.r}" y="${-n.r}" width="${2 * n.r}" height="${2 * n.r}" clip-path="url(#cround)" preserveAspectRatio="xMidYMid slice"/>
       ${n.bridge >= 0.04 ? `<circle class="bridge-ring" r="${n.r + 8}"/>` : ''}
-      <text y="${n.r + 16}" text-anchor="middle" dir="auto">${esc(n.name.length > 18 ? n.name.slice(0, 17) + '…' : n.name)}</text></g>`).join('')}</g></g>`;
+      <text y="${n.r + 16}" text-anchor="middle" dir="auto">${n.owner ? 'You' : esc(n.name.length > 18 ? n.name.slice(0, 17) + '…' : n.name)}</text>
+      <title>${esc(n.name)}</title></g>`).join('')}</g></g>`;
   const gv = $('#gv');
   const apply = () => { gv.setAttribute('transform', `translate(${view.x},${view.y}) scale(${view.k})`); svg.classList.toggle('zoomed', view.k > 1.15 * Math.min(W / (X1 - X0), H / (Y1 - Y0))); };
   apply();
   $('#glegend').innerHTML = `<span>${g.stats.people} people · ${g.stats.backbone} strong ties of ${g.stats.ties} · ${g.stats.circles} circles</span>${g.stats.circles_named_by === 'baseten' ? '<span>circles named by Muse Spark Open on Baseten</span>' : ''}
     <span title="Ties are normalised for how often each person appears; the disparity filter (Serrano et al. 2009) keeps the significant ones; circles by your Life Graph groups and Louvain communities (modularity ${g.stats.modularity}); dashed rings mark bridges (betweenness).">ⓘ how</span>`;
-  $('#gme').onchange = e => { $('.owner-edges', svg).style.display = e.target.checked ? '' : 'none'; };
+  $('#gall').checked = everyone;
 
-  // ---- side panel: the overview, or one person ----
+  // ---- drawing the current state (after every change) ----
+  const refresh = () => {
+    for (const el of $$('.island', svg)) {
+      const c = el.dataset.circle, ci = circ[c], ms = members(c).sort((a, b) => b.count - a.count);
+      const isOpen = everyone || open.has(c);
+      el.classList.toggle('out', !inSphere(c) || !ms.length);
+      el.classList.toggle('open', isOpen);
+      const s = Math.max(28, Math.min(96, ci.r * .42)), k = Math.min(4, ms.length), fs = Math.max(15, ci.r / 7);
+      $('.bubble', el).innerHTML = isOpen ? '' : ms.slice(0, k).map((n, i) => {
+        const x = (i - (k - 1) / 2) * s * .78 - s / 2, y = -s * .75;
+        return `<circle cx="${x + s / 2}" cy="${y + s / 2}" r="${s / 2 + 2.5}" fill="${color[c]}"/>
+          <image href="${ref(n.id)}" data-name="${esc(n.name)}" x="${x}" y="${y}" width="${s}" height="${s}" clip-path="url(#cround)" preserveAspectRatio="xMidYMid slice"/>`; }).join('')
+        + (isOpen ? '' : `<text class="bcount" y="${s * .25 + 2.1 * fs + 16}" text-anchor="middle" style="font-size:${Math.max(12, ci.r / 11).toFixed(0)}px">click to open</text>`);
+      const t = $('.ilabel text', el);
+      t.textContent = `${cname(c)} · ${ms.length}`;
+      t.setAttribute('x', ci.x); t.setAttribute('y', isOpen ? ci.y - ci.r - 10 : ci.y + s * .25 + fs + 10);
+    }
+    for (const el of $$('.gnode', svg)) {
+      const n = byId[el.dataset.id], [x, y] = posOf(n), st = stateOf(n.id);
+      el.classList.toggle('off', !shown(n));
+      el.classList.toggle('faded', !!faded(n));
+      el.classList.toggle('muted', st === 'muted');
+      el.classList.toggle('memorial', st === 'memorial');
+      if (!el.classList.contains('dragging')) el.setAttribute('transform', `translate(${x},${y})`);
+      $('.disc', el).setAttribute('fill', n.owner ? 'var(--accent)' : color[circleOf(n)] || 'var(--ink-3)');
+    }
+    for (const el of $$('.edges .gedge', svg)) {
+      const a = byId[el.dataset.a], b = byId[el.dataset.b], [ax, ay] = posOf(a), [bx, by] = posOf(b);
+      el.setAttribute('x1', ax); el.setAttribute('y1', ay); el.setAttribute('x2', bx); el.setAttribute('y2', by);
+      const cross = !a.owner && circleOf(a) !== circleOf(b);
+      el.classList.toggle('cross', cross);
+      el.classList.toggle('off', !shown(a) || !shown(b));
+      if (a.owner) el.setAttribute('stroke-width', (1 + 1.6 * closeness(b.id)).toFixed(1));
+      else el.setAttribute('stroke', cross ? 'var(--ink-3)' : color[circleOf(a)]);
+    }
+    // bundles: one curved band per pair of circles instead of a web of single lines, routed in toward you
+    const agg = {};
+    for (const e of peers) {
+      const ca = circleOf(byId[e.a]), cb = circleOf(byId[e.b]);
+      if (ca === cb || stateOf(e.a) === 'hidden' || stateOf(e.b) === 'hidden' || !inSphere(ca) || !inSphere(cb)) continue;
+      const k = [ca, cb].sort().join('\u0000'); (agg[k] = agg[k] || {a: ca < cb ? ca : cb, b: ca < cb ? cb : ca, w: 0, n: 0}).w += e.w; agg[k].n++;
+    }
+    const maxB = Math.max(.01, ...Object.values(agg).map(x => x.w));
+    $('.bundles', svg).innerHTML = Object.values(agg).map(x => { const A = circ[x.a], B = circ[x.b];
+      const mx = (A.x + B.x) / 2 * .5, my = (A.y + B.y) / 2 * .5;
+      return `<path class="bundle" data-a="${esc(x.a)}" data-b="${esc(x.b)}" d="M${A.x},${A.y} Q${mx},${my} ${B.x},${B.y}"
+        stroke-width="${(2 + 10 * x.w / maxB).toFixed(1)}"><title>${esc(cname(x.a))} ↔ ${esc(cname(x.b))}: ${x.n} ties</title></path>`; }).join('');
+    // spokes: you at the centre, every circle radiating out from you
+    if (owner) {
+      const sums = {}; for (const e of g.edges) if (e.owner && byId[e.b] && stateOf(e.b) !== 'hidden') sums[circleOf(byId[e.b])] = (sums[circleOf(byId[e.b])] || 0) + e.w;
+      const maxS = Math.max(.01, ...Object.values(sums));
+      $('.spokes', svg).innerHTML = g.circles.filter(c => inSphere(c.name) && members(c.name).length).map(c => {
+        const d = Math.hypot(c.x - owner.x, c.y - owner.y) || 1, ux = (c.x - owner.x) / d, uy = (c.y - owner.y) / d;
+        return `<line class="spoke" x1="${owner.x + ux * (owner.r + 18)}" y1="${owner.y + uy * (owner.r + 18)}" x2="${c.x - ux * c.r}" y2="${c.y - uy * c.r}"
+          stroke="${color[c.name]}" stroke-width="${(1.5 + 7 * (sums[c.name] || 0) / maxS).toFixed(1)}"/>`; }).join('');
+    }
+    $$('.ilabel', svg).forEach(l => { const t = $('text', l), r = $('rect', l);   // a pill behind each circle's name
+      try { const b = t.getBBox(); r.setAttribute('x', b.x - 10); r.setAttribute('y', b.y - 4); r.setAttribute('width', b.width + 20);
+        r.setAttribute('height', b.height + 8); r.setAttribute('rx', (b.height + 8) / 2); } catch { /* not drawn */ } });
+  };
+
+  // ---- hover: lines between circles appear only for what you point at ----
+  const unhover = () => $$('.show', svg).forEach(el => el.classList.remove('show'));
+  svg.addEventListener('pointerover', e => {
+    if (e.pointerType !== 'mouse' || nodeDrag || drag?.moved) return;
+    unhover();
+    const nd = e.target.closest('.gnode'), isl = e.target.closest('.island');
+    if (nd) $$('.edges .gedge', svg).forEach(l => { if (l.dataset.a === nd.dataset.id || l.dataset.b === nd.dataset.id) l.classList.add('show'); });
+    else if (isl) $$('.bundle', svg).forEach(b => { if (b.dataset.a === isl.dataset.circle || b.dataset.b === isl.dataset.circle) b.classList.add('show'); });
+  });
+  svg.addEventListener('pointerleave', unhover);
+
+  // ---- moving a person into another circle ----
+  const spotIn = (c, n) => {   // the free spot in a circle farthest from everyone already in it
+    const taken = members(c.name).filter(m => m !== n).map(posOf);
+    let best = [c.x, c.y], bestD = -1;
+    for (const f of [.35, .55, .72]) for (let i = 0; i < 24; i++) {
+      const a = i / 24 * 2 * Math.PI, x = c.x + Math.cos(a) * (c.r - n.r - 8) * f, y = c.y + Math.sin(a) * (c.r - n.r - 8) * f;
+      const d = Math.min(1e9, ...taken.map(([tx, ty]) => Math.hypot(tx - x, ty - y)));
+      if (d > bestD) { bestD = d; best = [x, y]; }
+    }
+    return best;
+  };
+  const move = async (n, c, at) => {
+    const before = JSON.stringify(P.people[n.id] || {});
+    let [x, y] = at || spotIn(c, n);
+    const d = Math.hypot(x - c.x, y - c.y), lim = Math.max(0, c.r - n.r - 8);
+    if (d > lim) { x = c.x + (x - c.x) / d * lim; y = c.y + (y - c.y) / d * lim; }
+    Object.assign(pp(n.id), {circle: c.name, dx: Math.round(x - c.x), dy: Math.round(y - c.y)});
+    open.add(c.name);
+    await savePrefs(P); refresh(); overview();
+    toast(`${n.name} is now in ${cname(c.name)}${OV?.site ? ' (on this demo, for your visit only)' : ''}`, async () => {
+      P.people[n.id] = JSON.parse(before); await savePrefs(P); refresh(); overview(); });
+  };
+  const setState = async (id, st) => {
+    const before = stateOf(id), n = byId[id];
+    pp(id).state = before === st ? '' : st;
+    await savePrefs(P); refresh();
+    const label = {hidden: 'hidden from the map', muted: 'muted: never suggested', memorial: 'remembered, in memory'}[pp(id).state];
+    toast(label ? `${n.name}: ${label}` : `${n.name} is back as before`, async () => { pp(id).state = before; await savePrefs(P); refresh(); overview(); });
+    if (pp(id).state === 'hidden') overview(); else focus(id);
+  };
+
+  // ---- circle menu: open, album, film, edit ----
+  const closeMenu = () => { menu.hidden = true; menu.innerHTML = ''; };
+  const showMenu = (c, cx, cy) => {
+    const r = wrap.getBoundingClientRect(), ms = members(c), isOpen = everyone || open.has(c);
+    menu.innerHTML = `<div class="gm-head"><i class="dot" style="background:${color[c]}"></i><b dir="auto">${esc(cname(c))}</b>
+        <span class="tiny faint">${ms.length} people · ${SPHERES.find(s => s[0] === sphereOf(c))[1].toLowerCase()}</span></div>
+      <button role="menuitem" data-m="open">${ic(isOpen ? 'back' : 'plus')}${isOpen ? 'Close circle' : 'Open circle'}</button>
+      <button role="menuitem" data-m="album">${ic('memories')}View album</button>
+      <button role="menuitem" data-m="film">${ic('film')}Make a film of them</button>
+      <button role="menuitem" data-m="edit">${ic('sparkle')}Edit circle</button>`;
+    menu.dataset.circle = c;
+    menu.hidden = false;
+    menu.style.left = `${Math.min(r.width - menu.offsetWidth - 10, Math.max(10, cx - r.left + 8))}px`;
+    menu.style.top = `${Math.min(r.height - menu.offsetHeight - 10, Math.max(10, cy - r.top + 8))}px`;
+    $('button', menu)?.focus({preventScroll: true});
+  };
+  menu.onclick = async e => {
+    const b = e.target.closest('[data-m]'); if (!b) return;
+    const c = menu.dataset.circle, ms = members(c);
+    if (b.dataset.m === 'open') { open.has(c) || everyone ? (open.delete(c), everyone = false, $('#gall').checked = false) : open.add(c);
+      closeMenu(); refresh(); if (open.has(c)) zoomTo(circ[c].x, circ[c].y, circ[c].r); return; }
+    if (b.dataset.m === 'album') { closeMenu(); return album(c); }
+    if (b.dataset.m === 'film') { closeMenu();
+      location.hash = `#/films?req=${enc(`A one-minute film of ${cname(c)}: ${ms.slice(0, 6).map(en).join(', ')}${ms.length > 6 ? ' and the others' : ''} together, warm, from the first picture to the last.`)}`; return; }
+    if (b.dataset.m === 'edit') {
+      menu.innerHTML = `<div class="gm-head"><b>Edit circle</b></div>
+        <label class="tiny faint" for="gmname">Name</label><input id="gmname" class="input" dir="auto" value="${esc(cname(c))}">
+        <label class="tiny faint" for="gmsphere">Sphere</label><select id="gmsphere" class="input">${SPHERES.slice(1).map(([k, l]) => `<option value="${k}" ${sphereOf(c) === k ? 'selected' : ''}>${l}</option>`).join('')}</select>
+        <div class="chips" style="margin-top:10px"><button class="btn sm primary" data-m="save">Save</button><button class="btn sm ghost" data-m="cancel">Cancel</button></div>`;
+      $('#gmname').focus(); return;
+    }
+    if (b.dataset.m === 'save') {
+      const name = $('#gmname').value.trim();
+      P.circles[c] = {...P.circles[c], name: name && name !== c ? name : undefined, sphere: $('#gmsphere').value};
+      await savePrefs(P); closeMenu(); refresh(); overview();
+      toast(`Circle saved${OV?.site ? ' (on this demo, for your visit only)' : ''}`); return;
+    }
+    if (b.dataset.m === 'cancel') closeMenu();
+  };
+  document.addEventListener('keydown', function esc_(e) { if (!document.body.contains(menu)) return document.removeEventListener('keydown', esc_);
+    if (e.key === 'Escape') closeMenu(); });
+  const album = async c => {
+    side.innerHTML = `<button class="btn sm ghost" data-back>${ic('back')}All circles</button><div class="skeleton" style="height:200px;margin-top:12px"></div>`;
+    const cards = await api(`/api/group_album?ids=${enc(members(c).map(n => n.id).join(','))}`);
+    side.innerHTML = `<button class="btn sm ghost" data-back>${ic('back')}All circles</button>
+      <h3 style="margin:10px 0 4px" dir="auto">${esc(cname(c))}</h3><div class="small muted" style="margin-bottom:10px">${cards.length} pictures with the most of them in it</div>
+      ${photosHtml(cards.slice(0, 30)).replace('class="photos"', 'class="photos" style="columns:2 120px"')}`;
+  };
+
+  // ---- side panel: search, spheres, circles, and what the network says ----
   const tieRow = (t, me) => `<a href="#" class="tie" data-pair="${esc(me)}|${esc(t.id)}">${avatar(t)}<span><b dir="auto">${esc(t.name)}</b>
       <span class="tiny faint">${linkText(t)}${yrs(t) ? ' · ' + yrs(t) : ''}</span></span>
       <i class="bar" style="--w:${Math.min(100, Math.round(100 * t.strength / Math.max(.01, (window._maxS || 1))))}%"></i></a>`;
+  const person = (p, sub) => `<a href="#" data-focus="${esc(p.id)}">${avatar(p)}<span><b dir="auto">${esc(p.name)}</b><br><span class="tiny faint">${sub}</span></span></a>`;
+  const quiet = id => ['hidden', 'muted'].includes(stateOf(id));
+  const section = (title, rows) => rows.length ? `<div class="label tiny faint" style="margin-top:16px">${title}</div><div class="withlist">${rows.join('')}</div>` : '';
   const overview = () => {
     clear();
-    side.innerHTML = `<div class="eyebrow">Your circles</div>
-      <div class="chips" style="margin:10px 0 18px">${g.circles.slice().sort((a, b) => b.size - a.size).map(c =>
-        `<button class="chip" data-goto="${esc(c.name)}"><i class="dot" style="background:${color[c.name]}"></i>${esc(c.name)} · ${c.size}</button>`).join('')}</div>
-      ${ins.closest?.length ? `<div class="label tiny faint">Closest to you</div><div class="withlist">${ins.closest.map(t => person(t, `${t.pics} pictures together · ${yrs(t)}`)).join('')}</div>` : ''}
-      ${ins.bridges?.length ? `<div class="label tiny faint" style="margin-top:16px">Bridges between circles</div><div class="withlist">${ins.bridges.slice(0, 4).map(b =>
-        person(b, b.joins.length ? `connects ${b.joins.map(esc).join(', ')}` : 'between circles')).join('')}</div>` : ''}
-      ${ins.fading?.length ? `<div class="label tiny faint" style="margin-top:16px">Not seen together lately</div><div class="withlist">${ins.fading.slice(0, 4).map(t =>
-        person(t, `last together ${t.to} · ${t.pics + t.events} times before`)).join('')}</div>` : ''}
-      ${ins.rising?.length ? `<div class="label tiny faint" style="margin-top:16px">New in your life</div><div class="withlist">${ins.rising.slice(0, 4).map(t =>
-        person(t, `since ${t.from} · ${linkText(t)}`)).join('')}</div>` : ''}`;
+    const circles = g.circles.filter(c => inSphere(c.name) && members(c.name).length).sort((a, b) => members(b.name).length - members(a.name).length);
+    const closest = myTies.filter(t => t.pics && byId[t.id] && !quiet(t.id) && stateOf(t.id) !== 'memorial')
+      .sort((a, b) => closeness(b.id) - closeness(a.id) || b.pics - a.pics).slice(0, 6);
+    const memo = g.nodes.filter(n => stateOf(n.id) === 'memorial'), hidden = g.nodes.filter(n => stateOf(n.id) === 'hidden');
+    side.innerHTML = `<div class="netsearch"><input id="nsearch" class="input" type="search" placeholder="Find a person or circle" aria-label="Find a person or circle" dir="auto"></div>
+      <div class="spheres" role="group" aria-label="Spheres">${SPHERES.map(([k, l]) => `<button class="chip ${sphere === k ? 'on' : ''}" data-sphere="${k}">${l}</button>`).join('')}</div>
+      <div id="nresults"></div>
+      <div id="nlists"><div class="eyebrow" style="margin-top:14px">Your circles</div>
+      <div class="clist">${circles.map(c => `<button class="crow" data-goto="${esc(c.name)}"><i class="dot" style="background:${color[c.name]}"></i>
+        <span class="cname" dir="auto">${esc(cname(c.name))}</span><span class="n">${members(c.name).length}</span></button>`).join('') || '<span class="small muted">No circle in this sphere.</span>'}</div>
+      ${section('Closest to you', closest.map(t => person(t, `${P.people[t.id]?.close ? `you set ${'●'.repeat(closeness(t.id))}` : `${t.pics} pictures together`} · ${yrs(t)}`)))}
+      ${section('Bridges between circles', (ins.bridges || []).filter(b => !quiet(b.id)).slice(0, 4).map(b => person(b, b.joins.length ? `connects ${b.joins.map(j => esc(cname(j))).join(', ')}` : 'between circles')))}
+      ${section('Not seen together lately', (ins.fading || []).filter(t => !quiet(t.id) && stateOf(t.id) !== 'memorial').slice(0, 4).map(t => person(t, `last together ${t.to} · ${t.pics + t.events} times before`)))}
+      ${section('New in your life', (ins.rising || []).filter(t => !quiet(t.id)).slice(0, 4).map(t => person(t, `since ${t.from} · ${linkText(t)}`)))}
+      ${section('In memory', memo.map(n => person(n, lastYear[n.id] ? `last together ${lastYear[n.id]}` : 'remembered')))}
+      ${hidden.length ? `<div class="label tiny faint" style="margin-top:16px">Hidden from the map</div><div class="withlist">${hidden.map(n =>
+        `<div class="hiddenrow">${avatar(n)}<b dir="auto">${esc(n.name)}</b><button class="btn sm ghost" data-unhide="${esc(n.id)}">Show again</button></div>`).join('')}</div>` : ''}</div>`;
+    const q = $('#nsearch');
+    q.oninput = () => {
+      const s = q.value.trim().toLowerCase();
+      $('#nlists').hidden = !!s;
+      if (!s) { $('#nresults').innerHTML = ''; return; }
+      const cs = g.circles.filter(c => members(c.name).length && (cname(c.name).toLowerCase().includes(s) || c.name.toLowerCase().includes(s)));
+      const ps = g.nodes.filter(n => stateOf(n.id) !== 'hidden' && (n.name.toLowerCase().includes(s) || (n.name_en || '').toLowerCase().includes(s))).slice(0, 12);
+      $('#nresults').innerHTML = (cs.length ? `<div class="clist" style="margin-top:12px">${cs.map(c => `<button class="crow" data-goto="${esc(c.name)}"><i class="dot" style="background:${color[c.name]}"></i><span class="cname" dir="auto">${esc(cname(c.name))}</span><span class="n">${members(c.name).length}</span></button>`).join('')}</div>` : '')
+        + (ps.length ? `<div class="withlist" style="margin-top:8px">${ps.map(n => person(n, n.owner ? 'you' : esc(cname(circleOf(n))))).join('')}</div>` : '')
+        || '<p class="small muted" style="margin-top:12px">Nobody by that name on the map.</p>';
+    };
   };
-  const person = (p, sub) => `<a href="#" data-focus="${esc(p.id)}">${avatar(p)}<span><b dir="auto">${esc(p.name)}</b><br><span class="tiny faint">${sub}</span></span></a>`;
   const clear = () => { $$('.dim', svg).forEach(el => el.classList.remove('dim')); $$('.on', svg).forEach(el => el.classList.remove('on')); $('.egos', svg).innerHTML = ''; };
   const focus = async id => {
     const n = byId[id]; if (!n) return;
+    closeMenu();
+    if (!n.owner && !shown(n)) { if (stateOf(id) === 'hidden') pp(id).state = ''; if (!inSphere(circleOf(n))) sphere = 'all'; open.add(circleOf(n)); refresh(); }
     const t = await api(`/api/ties/${enc(id)}`);
     window._maxS = Math.max(.01, ...t.ties.map(x => x.strength));
     const near = new Set([id, ...t.ties.map(x => x.id)]);
+    const [nx, ny] = posOf(n);
     $$('.gnode', svg).forEach(el => el.classList.toggle('dim', !near.has(el.dataset.id)));
     $$('.gedge', svg).forEach(el => el.classList.add('dim'));
-    $$('.island', svg).forEach(el => el.classList.toggle('dim', !t.ties.some(x => byId[x.id]?.circle === el.dataset.circle) && n.circle !== el.dataset.circle));
-    $('.egos', svg).innerHTML = t.ties.filter(x => byId[x.id]).map(x => { const o = byId[x.id];
-      return `<line class="ego" x1="${n.x}" y1="${n.y}" x2="${o.x}" y2="${o.y}" stroke="${n.owner ? 'var(--accent)' : color[n.circle]}"
+    $$('.island', svg).forEach(el => el.classList.toggle('dim', !t.ties.some(x => byId[x.id] && circleOf(byId[x.id]) === el.dataset.circle) && circleOf(n) !== el.dataset.circle));
+    $('.egos', svg).innerHTML = t.ties.filter(x => byId[x.id] && shown(byId[x.id])).map(x => { const [ox, oy] = posOf(byId[x.id]);
+      return `<line class="ego" x1="${nx}" y1="${ny}" x2="${ox}" y2="${oy}" stroke="${n.owner ? 'var(--accent)' : color[circleOf(n)]}"
         stroke-width="${(1 + 7 * x.strength / window._maxS).toFixed(1)}" stroke-opacity="${(.25 + .6 * x.strength / window._maxS).toFixed(2)}"/>`; }).join('');
     $$('.gnode', svg).forEach(el => el.classList.toggle('on', el.dataset.id === id));
+    const st = stateOf(id), cl = P.people[id]?.close;
     side.innerHTML = `<div style="display:flex;gap:14px;align-items:center">${avatar(n, 'portrait" style="width:72px;height:72px;border-width:3px')}
-      <div><h3 dir="auto">${esc(n.name)}</h3><div class="small muted">${n.count} pictures${n.relation ? ' · ' + esc(n.relation) : ''}</div>
-      <div class="chips" style="margin-top:6px"><span class="chip"><i class="dot" style="background:${n.owner ? 'var(--accent)' : color[n.circle]}"></i>${esc(n.owner ? 'You' : n.circle)}</span></div></div></div>
+      <div><h3 dir="auto">${esc(n.name)}</h3><div class="small muted">${n.count} pictures${n.relation ? ' · ' + esc(n.relation) : ''}${st === 'memorial' ? ' · in memory' : ''}</div>
+      <div class="chips" style="margin-top:6px"><span class="chip"><i class="dot" style="background:${n.owner ? 'var(--accent)' : color[circleOf(n)]}"></i><span dir="auto">${esc(n.owner ? 'You' : cname(circleOf(n)))}</span></span></div></div></div>
       ${n.bridge >= 0.04 ? `<p class="small muted" style="margin:12px 0 0">A bridge: their ties link circles that are otherwise apart.</p>` : ''}
+      ${faded(n) ? `<p class="small muted" style="margin:8px 0 0">No picture together since ${lastYear[id]}, so they sit further out.</p>` : ''}
+      ${n.owner ? '' : `<div class="label tiny faint" style="margin:16px 0 6px">How close are you, really?</div>
+      <div class="close5" role="radiogroup" aria-label="Closeness">${[1, 2, 3, 4, 5].map(k => `<button role="radio" aria-checked="${closeness(id) >= k}" class="${closeness(id) >= k ? 'on' : ''}" data-close="${k}" aria-label="${k} of 5"></button>`).join('')}
+        <button class="btn sm ghost" data-close="auto" ${cl ? '' : 'disabled'}>Auto</button></div>
+      <div class="tiny faint">${cl ? 'Your setting.' : 'From pictures together.'} It orders "Closest to you" and the width of your ties; the photos stay as they are.</div>
+      <div class="label tiny faint" style="margin:14px 0 6px">Circle</div>
+      <select class="input" id="pmove">${g.circles.map(c => `<option value="${esc(c.name)}" ${circleOf(n) === c.name ? 'selected' : ''}>${esc(cname(c.name))}</option>`).join('')}</select>
+      <div class="chips" style="margin-top:10px">
+        <button class="btn sm ${st === 'hidden' ? 'primary' : 'ghost'}" data-state="hidden" title="Take them off the map; find them again at the bottom of the circles list">Hide</button>
+        <button class="btn sm ${st === 'muted' ? 'primary' : 'ghost'}" data-state="muted" title="Keep them on the map, but never suggest them anywhere">Mute</button>
+        <button class="btn sm ${st === 'memorial' ? 'primary' : 'ghost'}" data-state="memorial" title="Remember them: a quiet ring, never listed as fading">In memory</button></div>`}
       <div class="label tiny faint" style="margin:16px 0 6px">With whom, by pictures together</div>
-      <div class="withlist ties">${t.ties.slice(0, 30).map(x => tieRow(x, id)).join('') || '<span class="small muted">Not in a picture with anyone named yet.</span>'}</div>
+      <div class="withlist ties">${t.ties.filter(x => stateOf(x.id) !== 'hidden').slice(0, 30).map(x => tieRow(x, id)).join('') || '<span class="small muted">Not in a picture with anyone named yet.</span>'}</div>
       <div class="chips" style="margin-top:14px"><a class="btn sm primary" href="#/person/${enc(id)}">Open page</a><button class="btn sm ghost" data-back>All circles</button></div>`;
+    const sel = $('#pmove'); if (sel) sel.onchange = () => move(n, circ[sel.value], null);
     if (innerWidth < 760) side.scrollIntoView({behavior: 'smooth', block: 'start'});
   };
   const pair = async (a, b) => {
@@ -669,44 +918,79 @@ afterRender.connections = async (_, params) => {
       ${photosHtml(ms.slice(0, 16)).replace('class="photos"', 'class="photos" style="columns:2 120px"')}
       <a class="btn sm primary" style="margin-top:10px" href="#/films?req=${enc(`A one-minute film about ${en(na)} and ${en(nb)} together, from the first picture to the last.`)}">${ic('film')}Film of the two</a>`;
   };
-  side.onclick = e => {
+  side.onclick = async e => {
     const f = e.target.closest('[data-focus]'); if (f) { e.preventDefault(); return focus(f.dataset.focus); }
     const p = e.target.closest('[data-pair]'); if (p) { e.preventDefault(); const [a, b] = p.dataset.pair.split('|'); return pair(a, b); }
-    const c = e.target.closest('[data-goto]'); if (c) { const ci = g.circles.find(x => x.name === c.dataset.goto); zoomTo(ci.x, ci.y, ci.r); return; }
+    const c = e.target.closest('[data-goto]'); if (c) { const ci = circ[c.dataset.goto]; open.add(ci.name); refresh(); zoomTo(ci.x, ci.y, ci.r); return; }
+    const s = e.target.closest('[data-sphere]'); if (s) { sphere = s.dataset.sphere; refresh(); fit(); apply(); return overview(); }
+    const u = e.target.closest('[data-unhide]'); if (u) { pp(u.dataset.unhide).state = ''; await savePrefs(P); refresh();
+      toast(`${byId[u.dataset.unhide].name} is back on the map`); return overview(); }
+    const st = e.target.closest('[data-state]'); if (st) { const id = $('.gnode.on', svg)?.dataset.id; if (id) setState(id, st.dataset.state); return; }
+    const cl = e.target.closest('[data-close]'); if (cl) { const id = $('.gnode.on', svg)?.dataset.id; if (!id) return;
+      pp(id).close = cl.dataset.close === 'auto' ? undefined : +cl.dataset.close; await savePrefs(P); refresh(); return focus(id); }
     if (e.target.closest('[data-back]')) { overview(); }
   };
   const zoomTo = (x, y, r) => { const k = Math.min(3, Math.min(W, H) / (2.4 * r)); view = {k, x: W / 2 - k * x, y: H / 2 - k * y}; gv.style.transition = 'transform .4s'; apply(); setTimeout(() => gv.style.transition = '', 450); };
-  overview();
 
-  // ---- pan, zoom, pinch, click ----
-  const pts = new Map(); let drag = null, moved = false, pinch = null;
+  // ---- pan, zoom, pinch, click, drag a person ----
+  const pts = new Map(); let drag = null, moved = false, pinch = null, nodeDrag = null;
   const toWorld = (cx, cy) => { const r = svg.getBoundingClientRect(); return [(cx - r.left) * W / r.width, (cy - r.top) * H / r.height]; };
+  const toMap = (cx, cy) => { const [sx, sy] = toWorld(cx, cy); return [(sx - view.x) / view.k, (sy - view.y) / view.k]; };
   const zoomAt = (mx, my, f) => { view.x = mx - (mx - view.x) * f; view.y = my - (my - view.y) * f; view.k *= f; apply(); };
+  const islandAt = (x, y) => g.circles.find(c => inSphere(c.name) && Math.hypot(x - c.x, y - c.y) < c.r);
   svg.addEventListener('pointerdown', e => { pts.set(e.pointerId, [e.clientX, e.clientY]); svg.setPointerCapture(e.pointerId);
+    const nd = e.target.closest('.gnode');
+    if (pts.size === 1 && nd && !byId[nd.dataset.id].owner) { nodeDrag = {el: nd, n: byId[nd.dataset.id], x: e.clientX, y: e.clientY, moved: false}; return; }
     if (pts.size === 1) { drag = {x: e.clientX, y: e.clientY, vx: view.x, vy: view.y}; moved = false; }
-    if (pts.size === 2) { const [p1, p2] = [...pts.values()]; pinch = {d: Math.hypot(p1[0] - p2[0], p1[1] - p2[1]), k: view.k}; } });
+    if (pts.size === 2) { if (nodeDrag) { nodeDrag.el.classList.remove('dragging'); nodeDrag = null; refresh(); }
+      const [p1, p2] = [...pts.values()]; pinch = {d: Math.hypot(p1[0] - p2[0], p1[1] - p2[1]), k: view.k}; } });
   svg.addEventListener('pointermove', e => {
     if (!pts.has(e.pointerId)) return; pts.set(e.pointerId, [e.clientX, e.clientY]);
+    if (nodeDrag) {
+      if (!nodeDrag.moved && Math.abs(e.clientX - nodeDrag.x) + Math.abs(e.clientY - nodeDrag.y) < 6) return;
+      nodeDrag.moved = true; nodeDrag.el.classList.add('dragging'); unhover(); closeMenu();
+      const [x, y] = toMap(e.clientX, e.clientY), c = islandAt(x, y);
+      nodeDrag.el.setAttribute('transform', `translate(${x},${y}) scale(1.15)`);
+      $$('.island', svg).forEach(el => el.classList.toggle('drop', !!c && el.dataset.circle === c.name && c.name !== circleOf(nodeDrag.n)));
+      return;
+    }
     if (pts.size === 2 && pinch) { const [p1, p2] = [...pts.values()]; const d = Math.hypot(p1[0] - p2[0], p1[1] - p2[1]);
       const [mx, my] = toWorld((p1[0] + p2[0]) / 2, (p1[1] + p2[1]) / 2); zoomAt(mx, my, (pinch.k * d / pinch.d) / view.k); moved = true; return; }
     if (!drag) return; const dx = e.clientX - drag.x, dy = e.clientY - drag.y;
     if (Math.abs(dx) + Math.abs(dy) > 4) moved = true;
     const r = svg.getBoundingClientRect(); view.x = drag.vx + dx * W / r.width; view.y = drag.vy + dy * H / r.height; apply(); });
-  const up = e => { pts.delete(e.pointerId); if (pts.size < 2) pinch = null; if (pts.size) return; drag = null; if (moved) return;
+  const up = e => { pts.delete(e.pointerId); if (pts.size < 2) pinch = null; if (pts.size) return;
+    if (nodeDrag) { const d = nodeDrag; nodeDrag = null; d.el.classList.remove('dragging'); $$('.island.drop', svg).forEach(el => el.classList.remove('drop'));
+      if (!d.moved) return focus(d.n.id);
+      const [x, y] = toMap(e.clientX, e.clientY), c = islandAt(x, y);
+      if (c && c.name !== circleOf(d.n)) return move(d.n, c, [x, y]);
+      if (c) { Object.assign(pp(d.n.id), {circle: c.name, dx: Math.round(x - c.x), dy: Math.round(y - c.y)}); savePrefs(P); }   // moved within its own circle
+      return refresh(); }
+    drag = null; if (moved) return;
     const hit = document.elementFromPoint(e.clientX, e.clientY) || e.target;
-    const n = hit.closest('.gnode'), l = hit.closest('.gedge');
-    if (n) focus(n.dataset.id); else if (l) pair(l.dataset.a, l.dataset.b); else overview(); };
-  svg.addEventListener('pointerup', up); svg.addEventListener('pointercancel', e => { pts.delete(e.pointerId); drag = null; pinch = null; });
+    const n = hit.closest('.gnode'), l = hit.closest('.gedge'), isl = hit.closest('.island');
+    if (n) focus(n.dataset.id); else if (l) pair(l.dataset.a, l.dataset.b);
+    else if (isl) showMenu(isl.dataset.circle, e.clientX, e.clientY);
+    else { closeMenu(); overview(); } };
+  svg.addEventListener('pointerup', up); svg.addEventListener('pointercancel', e => { pts.delete(e.pointerId); drag = null; pinch = null;
+    if (nodeDrag) { nodeDrag.el.classList.remove('dragging'); nodeDrag = null; refresh(); } });
+  svg.addEventListener('dblclick', e => { const isl = e.target.closest('.island'); if (!isl) return; closeMenu(); open.add(isl.dataset.circle); refresh();
+    const c = circ[isl.dataset.circle]; zoomTo(c.x, c.y, c.r); });
   svg.addEventListener('wheel', e => { e.preventDefault(); const [mx, my] = toWorld(e.clientX, e.clientY); zoomAt(mx, my, Math.exp(-e.deltaY * .0015)); }, {passive: false});
   $$('.gtools [data-z]').forEach(b => b.onclick = () => { if (b.dataset.z === 'fit') { fit(); apply(); } else zoomAt(W / 2, H / 2, b.dataset.z === 'in' ? 1.3 : 1 / 1.3); });
+  $('#gme').onchange = e => { $('.owner-edges', svg).style.display = e.target.checked ? '' : 'none'; };
+  $('#gall').onchange = e => { everyone = e.target.checked; if (!everyone) open.clear(); refresh(); };
+  $('#gfade').onchange = e => { fadeOn = e.target.checked; refresh(); };
+
+  refresh();
+  overview();
   const want = params.get('focus');
-  if (want && byId[want]) { focus(want); zoomTo(byId[want].x, byId[want].y, 260); }
-  timeline(svg, g, byId);
+  if (want && byId[want]) { focus(want); const [x, y] = posOf(byId[want]); zoomTo(x, y, 260); }
+  if (years) netYears(svg, g, byId, posOf, years);
 };
 
 // the circles through time: everyone stays where they are; each year lights up who was there and with whom
-async function timeline(svg, g, byId) {
-  const t = await api('/api/graph/years').catch(() => null);
+async function netYears(svg, g, byId, posOf, t) {
   if (!t || t.years.length < 2) return;
   const bar = $('#timebar'), slider = $('#tyear');
   bar.hidden = false;
@@ -722,7 +1006,7 @@ async function timeline(svg, g, byId) {
   const show = i => {
     const y = t.years[i];
     if (!y) {   // all years
-      nodes.forEach(n => { n.classList.remove('ghost', 'lit', 'fresh'); n.setAttribute('transform', `translate(${byId[n.dataset.id].x},${byId[n.dataset.id].y})`); });
+      nodes.forEach(n => { n.classList.remove('ghost', 'lit', 'fresh'); n.setAttribute('transform', `translate(${posOf(byId[n.dataset.id]).join(',')})`); });
       edges.forEach(e => e.classList.remove('ghost', 'lit'));
       islands.forEach(c => c.classList.remove('ghost'));
       $('#tylabel').textContent = 'All years'; $('#tycap').textContent = `${g.stats.people} people`;
@@ -737,7 +1021,7 @@ async function timeline(svg, g, byId) {
       const on = c > 0 || nd.owner;
       n.classList.toggle('ghost', !on); n.classList.toggle('lit', on); n.classList.toggle('fresh', first[id] === y);
       const k = on ? .75 + .55 * Math.sqrt(c / maxC) : .6;
-      n.setAttribute('transform', `translate(${nd.x},${nd.y}) scale(${k.toFixed(2)})`);
+      n.setAttribute('transform', `translate(${posOf(nd).join(',')}) scale(${k.toFixed(2)})`);
       if (on) { lit.add(id); circlesLit.add(nd.circle); }
     });
     edges.forEach(e => { const n = (tieYears[[e.dataset.a, e.dataset.b].sort().join('|')] || {})[y] || 0;

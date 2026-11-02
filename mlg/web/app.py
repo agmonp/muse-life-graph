@@ -19,7 +19,7 @@ from fastapi.responses import FileResponse, Response
 from pydantic import BaseModel
 
 from mlg import identity, people, site
-from mlg.config import CACHE, DESKTOP, settings
+from mlg.config import CACHE, DATA, DESKTOP, settings
 from mlg.graph.db import session
 from mlg.ingest.scan import connect
 from mlg.muse.media import open_image
@@ -64,7 +64,8 @@ APP = STATIC / "app"
 from fastapi import Request  # noqa: E402
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse  # noqa: E402
 
-READ_ONLY = ("/api/answer", "/api/answer_group", "/api/undo", "/api/recheck", "/api/import", "/api/titles")
+READ_ONLY = ("/api/answer", "/api/answer_group", "/api/undo", "/api/recheck", "/api/import", "/api/titles",
+             "/api/graph/prefs")
 OPEN = ("/bless/", "/api/bless/", "/app/logo.svg", "/enter", "/api/gpu/")   # /api/gpu/ checks its own token
 REPO = "https://github.com/agmonp/muse-life-graph"
 DOWNLOAD = f"{REPO}/releases/latest/download/MuseLifeGraph-windows.zip"   # built by .github/workflows/release.yml
@@ -292,6 +293,33 @@ def api_insights():
 @app.get("/api/shared")
 def api_shared(a: str, b: str):
     return library.shared(a, b)
+
+
+@app.get("/api/group_album")
+def api_group_album(ids: str):
+    return library.group_album([i for i in ids.split(",") if i][:200])
+
+
+# the owner's own reading of the map: closeness, hidden / muted / in memory, moves, circle names and spheres.
+# The page applies them; the graph itself is not changed. The hosted demo keeps a visitor's in their browser.
+GRAPH_PREFS = DATA / "graph_prefs.json"
+
+
+@app.get("/api/graph/prefs")
+def api_graph_prefs():
+    import json
+    if site.enabled() or not GRAPH_PREFS.exists():
+        return {}
+    return json.loads(GRAPH_PREFS.read_text(encoding="utf-8"))
+
+
+@app.post("/api/graph/prefs")
+def api_graph_prefs_save(prefs: dict):
+    import json
+    tmp = GRAPH_PREFS.with_suffix(".tmp")
+    tmp.write_text(json.dumps(prefs, ensure_ascii=False, indent=1), encoding="utf-8")
+    tmp.replace(GRAPH_PREFS)
+    return {"ok": True}
 
 
 @app.get("/api/moment/{mid}")

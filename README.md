@@ -36,7 +36,10 @@ this code during the hackathon.
    screen names many.
 3. **Reasons over the graph.** Neo4j holds moments, people, places, utterances and evidence on every edge.
    Network science (disparity-filter backbone, Louvain circles, betweenness bridges) shows the circles of a
-   life forming and fading year by year; Muse Spark Open names them.
+   life forming and fading year by year; Muse Spark Open names them. On the map you are the centre: circles
+   open like bubbles, lines between circles appear only for what you point at, people you haven't been
+   photographed with in five years recede, and you can drag someone into the right circle, say how close you
+   really are, or hide, mute or remember a person. The map changes; the evidence doesn't.
 4. **Makes a film with an agent crew.** One sentence → Researcher → Producer (Muse Spark) → Screenwriter
    (Muse Wonder) → *pause and ask the owner what only they know* → Picture Checker (looks at every picture)
    → **Copywriter** (rewrites the narration as one host voice: nostalgic, playful or documentary; code sends

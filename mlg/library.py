@@ -359,6 +359,17 @@ def shared(a: str, b: str) -> list[dict]:
     return [card(m, ppl) for m in ms if memory_key(m) in keys and (a in m["people"] or b in m["people"])]
 
 
+def group_album(ids: list[str], limit: int = 60) -> list[dict]:
+    """A circle's album: pictures with the most of its people in them, newest first among equals."""
+    want = set(ids)
+    ms, ppl = data()
+    scored = [(len(want & set(m["people"])), m) for m in ms]
+    best = [(n, m) for n, m in scored if n >= min(2, len(want))]
+    best.sort(key=lambda t: t[1]["date"] or "", reverse=True)
+    best.sort(key=lambda t: t[0], reverse=True)   # stable: most of them first, newest first among equals
+    return [card(m, ppl) for _, m in best[:limit]]
+
+
 def overview() -> dict:
     ms, ppl = data()
     me = owner()
