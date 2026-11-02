@@ -86,6 +86,15 @@ class Provider:
         return cls("meta", MetaHTTP(), s.model)
 
     @classmethod
+    def local(cls) -> "Provider":
+        """This computer's own model behind an OpenAI-compatible server (Ollama, LM Studio, llama.cpp)."""
+        s = settings()
+        if not s.local_model:
+            raise RuntimeError("No local model chosen - pick one on the setup screen (MLG_LOCAL_MODEL)")
+        return cls("local", MetaHTTP(s.local_url, "local", timeout=LOCAL_TIMEOUT, provider="local", tries=2),
+                   s.local_model)
+
+    @classmethod
     def baseten(cls) -> "Provider":
         s = settings()
         if not s.baseten_key:
@@ -101,7 +110,9 @@ class Provider:
 # Muse Spark API. A failed Spark Open call falls back to the API, and the log says so.
 OPEN_TASKS = {"search", "titles", "circles", "checker"}
 OPEN_TIMEOUT = float(os.environ.get("MLG_SPARK_OPEN_TIMEOUT", "60"))
-SERVED_BY = {"baseten": "Muse Spark Open on Baseten", "meta": "Muse Spark (Meta Model API)"}
+LOCAL_TIMEOUT = float(os.environ.get("MLG_LOCAL_TIMEOUT", "900"))   # a consumer GPU can take minutes on a video
+SERVED_BY = {"baseten": "Muse Spark Open on Baseten", "meta": "Muse Spark (Meta Model API)",
+             "local": "this computer's own model"}
 
 
 def open_tasks() -> set[str]:
@@ -115,7 +126,11 @@ def open_tasks() -> set[str]:
     return {t.strip() for t in raw.split(",") if t.strip()}
 
 
-def provider_for(task: str | None) -> Provider:
+def provider_for(task: str | None, parts: list[Part] | None = None) -> Provider:
+    mode = settings().mode
+    # local: everything here; mixed: anything carrying a picture or a sound stays here, only text goes out
+    if mode == "local" or (mode == "mixed" and any(p.kind != "text" for p in parts or [])):
+        return Provider.local()
     tasks = open_tasks()
     if task and settings().baseten_key and (task in tasks or "*" in tasks):
         return Provider.baseten()
@@ -174,7 +189,10 @@ def ask(parts: list[Part], *, system: str | None = None, model: str | None = Non
 
     `task` names the job ("search", "titles", ...) for the usage log and picks the provider: tasks listed
     in MLG_SPARK_OPEN run on Muse Spark Open (Baseten) and fall back to the Muse Spark API if it fails."""
-    provider = provider or provider_for(task)
+    provider = provider or provider_for(task, parts)
+    if provider.name == "local":
+        return _ask(local_parts(parts), system, provider.default_model, schema, schema_name, effort,
+                    max_tokens, provider, use_cache, False, task)
     use_responses = force_responses or any(p.kind == "video" for p in parts)
     if provider.name == "baseten":
         if use_responses:
@@ -194,6 +212,30 @@ def ask(parts: list[Part], *, system: str | None = None, model: str | None = Non
                       use_cache, use_responses, task)
         answer.fallback = f"{type(e).__name__}: {str(e)[:160]}"
         return answer
+
+
+def local_parts(parts: list[Part]) -> list[Part]:
+    """What a local model can take: text and pictures. A video becomes its keyframes; a sound becomes its
+    words, heard on this computer by Whisper - or a note that it was left out. Nothing goes to the cloud."""
+    out: list[Part] = []
+    for p in parts:
+        if p.kind == "video":
+            from mlg.perceive.keyframes import keyframes
+            frames = keyframes(p.path)
+            out.append(text(f"(the video as {len(frames)} keyframes in order)"))
+            for t, f in frames:
+                out += [text(f"at {t:.1f} s"), image(f)]
+        elif p.kind == "audio":
+            from mlg.muse import local_asr
+            if local_asr.available():
+                segs = local_asr.segments(p.path)
+                out.append(text("(the sound, transcribed on this computer)\n" + ("\n".join(
+                    f"[{a:.1f}-{b:.1f}] {w}" for a, b, w in segs) or "(no speech)")))
+            else:
+                out.append(text("(there is sound here, but this computer has no speech model; it was left out)"))
+        else:
+            out.append(p)
+    return out
 
 
 def _ask(parts, system, model, schema, schema_name, effort, max_tokens, provider, use_cache, use_responses,
@@ -241,12 +283,22 @@ def _call(parts, system, model, schema, schema_name, effort, max_tokens, provide
         if system:
             messages.append({"role": "system", "content": system})
         messages.append({"role": "user", "content": [_chat_part(p) for p in parts]})
-        body = {"model": model, "messages": messages, "max_tokens": max_tokens,
-                "reasoning_effort": effort}
+        body = {"model": model, "messages": messages, "max_tokens": max_tokens}
+        if provider.name != "local":           # local servers don't all know it; some reject the request
+            body["reasoning_effort"] = effort
         if schema:
             body["response_format"] = {"type": "json_schema", "json_schema": {
                 "name": schema_name, "schema": schema, "strict": True}}
-        reply = provider.http.post("/chat/completions", body, log)
+        try:
+            reply = provider.http.post("/chat/completions", body, log)
+        except MuseError as e:
+            if provider.name != "local" or e.status != 400 or not schema:
+                raise
+            # an older local server without structured output: ask for JSON and describe the shape instead
+            messages[0:0] = [{"role": "system", "content": "Answer with JSON only, matching this JSON schema:\n"
+                              + json.dumps(schema)}]
+            body["response_format"] = {"type": "json_object"}
+            reply = provider.http.post("/chat/completions", body, log)
         msg = reply.body["choices"][0]["message"]
         content = msg.get("content")
         out = content if isinstance(content, str) else "".join(

@@ -77,10 +77,14 @@ def _waiting_items() -> list[dict]:
 
 
 def estimate() -> dict:
+    from mlg.config import settings
     items = _waiting_items()
     by = {k: sum(1 for i in items if i["kind"] == k) for k in COST}
+    mode = settings().mode
+    if mode != "cloud":   # local and mixed: the looking happens on this computer, free; its speed is the GPU's
+        return {"items": len(items), "by_kind": by, "dollars": 0.0, "minutes": None, "mode": mode}
     return {"items": len(items), "by_kind": by, "dollars": round(sum(COST[k] * n for k, n in by.items()), 2),
-            "minutes": round(sum(SECONDS[k] * n for k, n in by.items()) / WORKERS / 60, 1)}
+            "minutes": round(sum(SECONDS[k] * n for k, n in by.items()) / WORKERS / 60, 1), "mode": mode}
 
 
 def _after_find(source: str, found: int, dups: int) -> None:
@@ -240,7 +244,9 @@ def start_looking(limit: int | None = None) -> dict:
         from mlg.perceive.run import perceive_item
         _set(state="looking", done=0, total=len(items), failed=0, started=time.time(), error=None)
         people = roster("real")
-        with ThreadPoolExecutor(WORKERS) as ex:
+        from mlg.config import settings
+        # one GPU answers one request at a time; two in flight keep it busy without timing out the rest
+        with ThreadPoolExecutor(WORKERS if settings().mode == "cloud" else 2) as ex:
             futs = [ex.submit(perceive_item, it, people) for it in items]
             for f in as_completed(futs):
                 try:

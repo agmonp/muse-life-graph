@@ -55,6 +55,8 @@ def _call(wav: Path, mode: str, languages: list[str] | None, keywords: list[str]
 
 def transcribe(src: Path, *, mode: str = "DIARIZATION", languages: list[str] | None = None,
                keywords: list[str] | None = None, use_cache: bool = True) -> Transcript:
+    if settings().mode != "cloud":
+        return _local(src, use_cache)   # local and mixed: a recording never leaves this computer
     http = MetaHTTP()
     key = cache.key_for({"asr": sha256_file(src), "mode": mode, "lang": languages, "kw": keywords})
     if use_cache and (hit := cache.get(key)):
@@ -74,6 +76,22 @@ def transcribe(src: Path, *, mode: str = "DIARIZATION", languages: list[str] | N
             turns.append(Turn(t["startMs"] + offset, t["endMs"] + offset,
                               t.get("transcript", ""), t.get("speaker"), w))
     result = Transcript(" ".join(x for x in texts if x), dur, turns)
+    cache.put(key, {"text": result.text, "duration_ms": result.duration_ms,
+                    "turns": [t.__dict__ for t in result.turns]})
+    return result
+
+
+def _local(src: Path, use_cache: bool) -> Transcript:
+    """Whisper on this computer: one speaker label for all (it doesn't separate voices), segment times."""
+    from mlg.muse import local_asr
+    key = cache.key_for({"asr_local": sha256_file(src), "model": local_asr.MODEL})
+    if use_cache and (hit := cache.get(key)):
+        return Transcript(hit["text"], hit["duration_ms"], [Turn(**t) for t in hit["turns"]])
+    if not local_asr.available():
+        return Transcript("", int((probe_duration(src) or 0) * 1000), [])
+    segs = local_asr.segments(src)
+    result = Transcript(" ".join(w for _, _, w in segs), int((probe_duration(src) or 0) * 1000),
+                        [Turn(int(a * 1000), int(b * 1000), w, "A") for a, b, w in segs])
     cache.put(key, {"text": result.text, "duration_ms": result.duration_ms,
                     "turns": [t.__dict__ for t in result.turns]})
     return result

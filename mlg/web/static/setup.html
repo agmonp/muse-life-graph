@@ -34,19 +34,58 @@
   button:disabled { opacity: .6; cursor: wait; }
   .privacy { background: var(--soft); border-radius: 14px; padding: 14px 16px; font-size: 14px; color: var(--ink-2); margin-top: 18px; }
   .opt { font-weight: 400; color: var(--ink-3); }
+  .modes { display: grid; gap: 10px; margin-top: 14px; }
+  .mode { display: grid; grid-template-columns: 22px 1fr; gap: 10px; align-items: start; padding: 14px 16px; border: 1px solid var(--line);
+          border-radius: 14px; cursor: pointer; margin: 0; font-weight: 400; }
+  .mode:has(input:checked) { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent) inset; }
+  .mode input { width: 18px; height: 18px; margin: 3px 0 0; accent-color: var(--accent); }
+  .mode b { display: block; font-size: 16px; }
+  .mode span { display: block; font-size: 14px; color: var(--ink-2); }
+  .tag { display: inline-block; font-size: 12px; font-weight: 700; color: var(--ok); margin-left: 6px; }
+  .hw { font-size: 14px; color: var(--ink-2); background: var(--soft); border-radius: 12px; padding: 10px 14px; margin-top: 12px; }
+  select { width: 100%; padding: 11px 13px; border: 1px solid var(--line); border-radius: 12px; font: inherit; background: var(--bg); color: var(--ink); }
+  [hidden] { display: none !important; }
 </style>
 </head>
 <body>
 <main>
   <img src="/app/logo.svg" width="44" alt="">
   <h1>Set up Muse Life Graph</h1>
-  <p>Muse Life Graph runs on this computer and reads your photos where they are. It needs two things of your own:
-    a key for Meta's models, and a free graph database. You pay Meta directly for what Muse reads (about $0.006 a
-    photo; the app shows the estimate before it spends anything).</p>
+  <p>Muse Life Graph runs on this computer and reads your photos where they are. First choose who looks at them:
+    a model on this computer (free and private, slower), or Meta's models in the cloud (faster and sharper, about
+    $0.006 a photo, paid to Meta directly). You can change this later.</p>
 
   <form id="f">
     <div class="card">
-      <h2>1 · Your Meta Model API key</h2>
+      <h2>1 · Where should Muse look at your photos?</h2>
+      <div class="hw" id="hw">Checking this computer…</div>
+      <div class="modes">
+        <label class="mode"><input type="radio" name="mode" value="local"><div><b>Everything on this computer<i class="tag" data-tag="local"></i></b>
+          <span>Free, works offline, nothing leaves your machine. Needs a graphics card with about 24 GB (or an Apple
+          Mac with 32 GB or more) for Meta's open Muse Glimmer model. Slower, and the films are simpler.</span></div></label>
+        <label class="mode"><input type="radio" name="mode" value="mixed"><div><b>Pictures here, words in the cloud<i class="tag" data-tag="mixed"></i></b>
+          <span>Your photos, videos and voices are looked at on this computer and never uploaded; only text (what
+          was seen, the film's words) goes to Meta's API. Needs an 8 GB+ graphics card and a Meta key.</span></div></label>
+        <label class="mode"><input type="radio" name="mode" value="cloud"><div><b>Meta's models in the cloud<i class="tag" data-tag="cloud"></i></b>
+          <span>Fastest and most accurate; no special computer. Each photo is sent to Meta's API to be looked at.
+          Needs a Meta key. (While you use Meta's free credits, Meta may use what you send to improve its products.)</span></div></label>
+      </div>
+      <div id="localbox" hidden>
+        <label for="local_url">Your local model server</label>
+        <select id="local_url" name="local_url"></select>
+        <div class="hint" id="noserver" hidden>No local model server is running. Install <a href="https://ollama.com/download" target="_blank" rel="noopener">Ollama</a>
+          (or LM Studio), then get a model: <code>ollama pull</code> Muse Glimmer for everything here, or any vision model for pictures only.
+          Then reopen this page.</div>
+        <label for="local_model">Model</label>
+        <select id="local_model" name="local_model"></select>
+        <div class="hint">Best: Meta's <a href="https://research.meta.ai/blog/introducing-muse-glimmer-open-agentic-model" target="_blank" rel="noopener">Muse Glimmer</a> (open weights). A smaller vision model works for "pictures here".
+          Speech is heard on this computer by Whisper when it is installed.</div>
+        <div class="res" id="r_local"></div>
+      </div>
+    </div>
+
+    <div class="card" id="metacard">
+      <h2>2 · Your Meta Model API key <span class="opt" id="metaopt" hidden>(not needed when everything runs here)</span></h2>
       <ol><li>Open <a href="https://dev.meta.ai" target="_blank" rel="noopener">dev.meta.ai</a> and sign in.</li>
         <li>Create an API key and copy it.</li></ol>
       <label for="meta_key">Meta API key</label>
@@ -56,10 +95,12 @@
     </div>
 
     <div class="card">
-      <h2>2 · Your graph database (free)</h2>
+      <h2>3 · Your graph database (free)</h2>
       <ol><li>Open <a href="https://console.neo4j.io" target="_blank" rel="noopener">console.neo4j.io</a> and create a free
         <b>AuraDB Free</b> instance.</li>
         <li>Download its credentials file when it offers it: it has the address and the password.</li></ol>
+      <div class="hint">For everything on this computer, install <a href="https://neo4j.com/deployment-center/" target="_blank" rel="noopener">Neo4j</a>
+        locally instead and use <code>bolt://localhost:7687</code>: then not even the descriptions leave your machine.</div>
       <label for="neo4j_uri">Connection URI</label>
       <input id="neo4j_uri" name="neo4j_uri" placeholder="neo4j+s://xxxxxxxx.databases.neo4j.io" autocomplete="off" spellcheck="false">
       <label for="neo4j_user">Username</label>
@@ -71,7 +112,7 @@
     </div>
 
     <div class="card">
-      <h2>3 · Muse Spark Open on Baseten <span class="opt">(optional)</span></h2>
+      <h2>4 · Muse Spark Open on Baseten <span class="opt">(optional, cloud modes)</span></h2>
       <p>With a Baseten key, search, memory titles and the picture checker run on Meta's open-weights model. Without
         one, everything uses your Meta key.</p>
       <label for="baseten_key">Baseten API key</label>
@@ -81,26 +122,52 @@
     </div>
 
     <div class="privacy">Your keys are saved only on this computer, in <code id="home">your app folder</code>, and
-      sent only to the services they belong to. Your photos never leave this computer except as the model calls
-      themselves.</div>
+      sent only to the services they belong to. Your photos are read where they are; with "everything on this
+      computer" or "pictures here" they are never sent anywhere.</div>
     <button id="go" type="submit">Check and save</button>
     <div class="res" id="r_all" style="text-align:center"></div>
   </form>
 </main>
 <script>
 const $ = id => document.getElementById(id);
-fetch('/api/setup').then(r => r.json()).then(s => {
+const opt = (v, label, on) => { const o = document.createElement('option'); o.value = v; o.textContent = label; o.selected = !!on; return o; };
+let HW = null, SAVED = {};
+// the chosen mode decides what the page asks for: a local model, a Meta key, or both
+const showMode = () => {
+  const m = document.querySelector('[name=mode]:checked')?.value || 'cloud';
+  $('localbox').hidden = m === 'cloud';
+  $('metaopt').hidden = m !== 'local';
+  $('metacard').style.opacity = m === 'local' ? .6 : 1;
+};
+const fillModels = () => {
+  const s = (HW?.servers || []).find(x => x.url === $('local_url').value);
+  $('local_model').replaceChildren(...(s?.models || []).map(id => opt(id, id, id === SAVED.local_model || (!SAVED.local_model && /glimmer/i.test(id)))));
+};
+Promise.all([fetch('/api/setup').then(r => r.json()), fetch('/api/setup/hardware').then(r => r.json()).catch(() => null)]).then(([s, hw]) => {
+  SAVED = s.values; HW = hw;
   $('home').textContent = s.home;
   for (const k of ['neo4j_uri', 'neo4j_user']) if (s.values[k]) $(k).value = s.values[k];
   for (const k of ['meta_key', 'neo4j_password', 'baseten_key'])
     if (s.values[k]) $(k + '_now').textContent = `Saved (${s.values[k]}). Leave empty to keep it.`;
   if (s.configured) $('go').textContent = 'Check and save changes';
+  if (hw) {
+    $('hw').textContent = `${hw.gpu ? `${hw.gpu}${hw.vram_gb ? `, ${hw.vram_gb} GB` : ''}` : 'No NVIDIA graphics card found'} · ${hw.ram_gb} GB memory. ${hw.why}`;
+    document.querySelector(`[data-tag="${hw.suggest}"]`).textContent = 'suggested for this computer';
+    const servers = hw.servers.length ? hw.servers : [];
+    $('local_url').replaceChildren(...servers.map(x => opt(x.url, `${x.name} (${x.url})`, x.url === s.values.local_url)));
+    $('noserver').hidden = !!servers.length;
+  } else $('hw').textContent = 'Could not check this computer.';
+  const mode = s.configured ? s.values.mode : (hw?.suggest || 'cloud');
+  document.querySelector(`[name=mode][value="${mode}"]`).checked = true;
+  fillModels(); showMode();
 });
+document.querySelectorAll('[name=mode]').forEach(r => r.onchange = showMode);
+$('local_url').onchange = fillModels;
 $('f').onsubmit = async e => {
   e.preventDefault();
   const body = Object.fromEntries(new FormData($('f')));
   $('go').disabled = true; $('go').textContent = 'Checking your keys…';
-  for (const k of ['meta', 'graph', 'baseten', 'all']) { $('r_' + k).textContent = ''; $('r_' + k).className = 'res'; }
+  for (const k of ['meta', 'local', 'graph', 'baseten', 'all']) { $('r_' + k).textContent = ''; $('r_' + k).className = 'res'; }
   try {
     const r = await (await fetch('/api/setup', {method: 'POST', headers: {'Content-Type': 'application/json'},
                                                body: JSON.stringify(body)})).json();

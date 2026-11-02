@@ -40,10 +40,18 @@ class Settings:
     neo4j_uri: str
     neo4j_user: str
     neo4j_password: str
+    # where the looking and the writing happen (MLG_MODE):
+    #   cloud - everything on Meta's API (fast, needs a key, costs a little per photo)
+    #   mixed - every call that carries a picture, a video or a sound runs on this computer's own model;
+    #           only text (descriptions, the film's words) goes to the API
+    #   local - everything on this computer's own model: no key, no cost, nothing leaves the machine
+    mode: str
+    local_url: str
+    local_model: str
 
     def configured(self) -> bool:
-        """Enough to work: a Meta key and a graph database."""
-        return bool(self.api_key and self.neo4j_uri and self.neo4j_password)
+        """Enough to work: a graph database, and a Meta key unless everything runs on this computer."""
+        return bool((self.api_key or self.mode == "local") and self.neo4j_uri and self.neo4j_password)
 
     def require_key(self) -> str:
         if not self.api_key:
@@ -73,4 +81,10 @@ def settings() -> Settings:
         neo4j_uri=e("NEO4J_URI", ""),
         neo4j_user=e("NEO4J_USER", "neo4j"),
         neo4j_password=e("NEO4J_PASSWORD", ""),
+        mode=e("MLG_MODE", "cloud").strip().lower() if e("MLG_MODE", "cloud").strip().lower() in MODES else "cloud",
+        local_url=e("MLG_LOCAL_URL", "http://localhost:11434/v1").rstrip("/"),   # Ollama; LM Studio is :1234/v1
+        local_model=e("MLG_LOCAL_MODEL", ""),
     )
+
+
+MODES = ("cloud", "mixed", "local")

@@ -74,6 +74,7 @@ flowchart LR
 | **Muse Wonder 1.0** | Screenwriter; Copywriter (the narration as one host voice); Critic that watches the rendered draft *video*; the blind v1-vs-v2 judge |
 | **Muse Voice Transcribe 1.0** | Hebrew and English speech in videos and blessings, with speaker turns and timestamps |
 | **SAM 3.1**, **Muse Image 1.0** | Adapters (`mlg/muse/sam.py`, `mlg/muse/image.py`) and the day-1 capability probe ([docs/probe_report.md](docs/probe_report.md)); Muse Image made the fictional test family used until 2026-10-27. Neither is in the live pipeline now: faces come from Muse Spark boxes + YuNet |
+| **Muse Glimmer** (Meta open weights, on the user's own PC) | The recommended model for the downloadable app's "everything on this computer" mode: perception, the crew and search with no key and no cloud (see [Privacy](#privacy-three-ways-to-run-chosen-on-the-first-screen)) |
 | **MusicGen medium** (Meta open weights) | An original score per film, on the owner's GPU or a Modal A10G |
 | **SeamlessM4T v2** (Meta open weights) | The narrator (5.1% word error rate vs 16.5% for MMS-TTS, `scripts/voice_eval.py`) |
 
@@ -105,23 +106,43 @@ MusicGen and SeamlessM4T are Meta open weights too, run on the owner's own GPU (
 | Time and cost per film (median, hosted demo) | 7.2 min, $3.04 of Muse calls (mostly the Screenwriter reading the whole library) |
 | Muse Spark Open vs Muse Spark API, 30 inputs | Picture Checker: same keep/drop on 33 of 35 pictures; search: same people/years on 10 of 15; same cost; image calls slower (median 15 s vs 6 s) |
 
-## Privacy
+## Privacy: three ways to run, chosen on the first screen
 
 Muse Life Graph is made to run where your photos are: **on your own computer**. It reads a folder or your
-Facebook / Instagram download in place; the files never leave your machine except as the model calls
-themselves (Meta's API or Baseten, never a `-contributor` model that trains on your data). The graph can be a
-local Neo4j. Reference faces stay in a git-ignored folder. The live demo is one family's library, shared by
-its owner with consent, behind an access code; visitors cannot rename anyone.
+Facebook / Instagram download in place and never copies the library anywhere. Who *looks* at the photos is your
+choice; the setup screen checks the computer's graphics card and memory and suggests one:
+
+| Mode | Where the looking happens | Needs |
+|---|---|---|
+| **Everything on this computer** | Every call on your own model through Ollama / LM Studio (any OpenAI-compatible local server); speech by Whisper on the same machine. No key, no cost, works offline, nothing leaves the PC | ~24 GB GPU (or a 32 GB+ Apple Mac) for Meta's open **Muse Glimmer** |
+| **Pictures here, words in the cloud** | Any call that carries a photo, a video frame or a sound runs locally; only text (what was seen, the film's words) goes to Meta's API for the Screenwriter, Copywriter and Critic | 8 GB+ GPU and a Meta key |
+| **Meta's models in the cloud** | As before: Muse Spark, Wonder and Voice Transcribe on Meta's API | a Meta key (about $0.006 a photo) |
+
+`mlg/muse/chat.py` routes each call by its content (`MLG_MODE`): a video becomes its keyframes and a sound its
+transcript before it reaches a local model, and a recording is never sent to the cloud as a fallback. Tested end to
+end on a local vision model under Ollama on an RTX 5070 Ti (16 GB): the full perception schema in 12–24 s a photo,
+no Meta key. Muse Glimmer itself needs ~24 GB and was not run on our hardware; the screen recommends it where it fits.
+For speech in the local modes, install `faster-whisper` (the download leaves it out to stay small; without it the app
+says that sound was left out). For not even the descriptions to leave the PC, use a local Neo4j.
+
+We never use a `-contributor` model that trains on your data; note that while you use Meta's free API credits, Meta
+says it may use what you send to improve its products. Reference faces stay in a git-ignored folder. The live demo is
+one family's library, shared by its owner with consent, behind an access code; visitors cannot rename anyone, and a
+visitor's map edits stay in their own browser.
 
 ## Run it on your own computer
 
 **Windows 10/11: download the app.** Get
 [MuseLifeGraph-windows.zip](https://github.com/agmonp/muse-life-graph/releases/latest/download/MuseLifeGraph-windows.zip)
 from the latest [release](https://github.com/agmonp/muse-life-graph/releases), unzip it and open `MuseLifeGraph.exe`.
-The first screen asks for two things of your own and tests them before saving:
+The first screen asks where Muse should look at your photos (above), then for what that mode needs, and tests each
+part for real before saving:
 
-- a **Meta Model API key** ([dev.meta.ai](https://dev.meta.ai)); you pay Meta directly, about $0.006 a photo, and the
-  app shows the estimate before it spends anything;
+- for the local modes, a **local model server**: [Ollama](https://ollama.com) or LM Studio with a model (Muse Glimmer
+  for everything, or any vision model for pictures only); the screen lists what your server offers and sends it one
+  small picture to check;
+- for the cloud and mixed modes, a **Meta Model API key** ([dev.meta.ai](https://dev.meta.ai)); you pay Meta directly,
+  about $0.006 a photo, and the app shows the estimate before it spends anything;
 - a free **Neo4j AuraDB Free** database ([console.neo4j.io](https://console.neo4j.io)): the address and password from
   its credentials file;
 - optionally a **Baseten** key, to run search, titles and the Picture Checker on Muse Spark Open.
