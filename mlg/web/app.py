@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import hashlib
 import io
+import os
 import threading
 import time
 from pathlib import Path
@@ -175,6 +176,14 @@ def setup_page():
 def api_setup():
     from mlg import firstrun
     return firstrun.status()
+
+
+@app.get("/api/setup/hardware")
+def api_setup_hardware():
+    from mlg import firstrun
+    if not DESKTOP:
+        raise HTTPException(404)
+    return firstrun.hardware()
 
 
 @app.post("/api/setup")
@@ -760,10 +769,37 @@ def api_templates():
     return catalog()
 
 
+# the hosted demo makes films on the owner's own credits: a few for visitors, then the crew takes a bow
+DEMO_FILMS = int(os.environ.get("MLG_DEMO_FILMS", "6"))
+DEMO_COUNT = DATA / "demo_films.json"
+DEMO_DONE = ("Visitors have made {n} films here, every one paid from Agmon's own pocket "
+             "(about $3 each), so the crew is taking a bow. Want more? Download Muse Life Graph and make films "
+             "of your own photos, or bring Agmon some credits.")
+
+
+def _demo_film() -> None:
+    """Counts a visitor's film on the hosted demo; refuses once the demo's share is used up."""
+    import json
+    if not site.enabled():
+        return
+    n = json.loads(DEMO_COUNT.read_text(encoding="utf-8")).get("made", 0) if DEMO_COUNT.exists() else 0
+    if n >= DEMO_FILMS:
+        raise HTTPException(402, DEMO_DONE.format(n=n))
+    DEMO_COUNT.write_text(json.dumps({"made": n + 1}), encoding="utf-8")
+
+
+@app.get("/api/demo_films")
+def api_demo_films():
+    import json
+    n = json.loads(DEMO_COUNT.read_text(encoding="utf-8")).get("made", 0) if DEMO_COUNT.exists() else 0
+    return {"site": site.enabled(), "made": n, "limit": DEMO_FILMS, "left": max(0, DEMO_FILMS - n)}
+
+
 @app.post("/api/films")
 def api_make_film(r: FilmRequest):
     if not r.request.strip():
         raise HTTPException(400, "empty request")
+    _demo_film()
     film_id = time.strftime("film_%Y%m%d_%H%M%S")
 
     def run():
@@ -825,6 +861,7 @@ def resume_films(max_age_h: float = 6) -> list[str]:
 def api_film_again(film_id: str):
     """The same request, as a new film (for one that failed or was stopped)."""
     st = _state(film_id)
+    _demo_film()
     new_id = time.strftime("film_%Y%m%d_%H%M%S")
     _start_film(new_id, st["request"], st.get("dataset", "real"), st.get("template"), st.get("ask_wait", ASK_WAIT))
     for _ in range(50):

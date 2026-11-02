@@ -16,8 +16,20 @@ let lastAnswer = null;
 async function api(path, body, method) {
   const r = await fetch(path, body !== undefined || method ? {method: method || 'POST', headers: {'Content-Type': 'application/json'},
                                                                body: JSON.stringify(body ?? {})} : {});
-  if (!r.ok) throw new Error((await r.json().catch(() => ({}))).detail || r.statusText);
+  if (!r.ok) { const e = new Error((await r.json().catch(() => ({}))).detail || r.statusText); e.status = r.status; throw e; }
   return r.json();
+}
+// the hosted demo's films are paid by the owner: after a few, a friendly stop and the way to make your own
+function filmError(e) {
+  if (e.status !== 402) return toast(e.message);
+  const bg = document.createElement('div');
+  bg.className = 'modal-bg';
+  bg.innerHTML = `<div class="card modal" role="dialog" aria-labelledby="dlh"><div class="eyebrow">The crew takes a bow</div>
+    <h2 id="dlh" style="margin:6px 0 10px">That was the demo</h2><p class="muted">${esc(e.message)}</p>
+    <div class="chips" style="margin-top:18px"><a class="btn primary" href="https://github.com/agmonp/muse-life-graph/releases/latest/download/MuseLifeGraph-windows.zip">${ic('download')}Download for Windows</a>
+      <a class="btn ghost" href="#/films">Watch the films already made</a><button class="btn ghost" data-close>Close</button></div></div>`;
+  bg.onclick = ev => { if (ev.target === bg || ev.target.closest('[data-close]') || ev.target.closest('a[href^="#"]')) bg.remove(); };
+  document.body.append(bg);
 }
 
 function when(date, source, short) {
@@ -279,7 +291,9 @@ async function addPage() {
   } else if (w.items) {
     body = `<h3>${w.items} new ${w.items === 1 ? 'item is' : 'items are'} ready for Muse</h3>
       <p class="muted">${w.by_kind.photo} photos · ${w.by_kind.video} videos · ${w.by_kind.audio} voice notes${st.duplicates ? ` · ${st.duplicates} copies set aside` : ''}</p>
-      <p class="small muted">Muse looks at each one once: about <b>$${w.dollars.toFixed(2)}</b> and <b>${Math.max(1, Math.round(w.minutes))} min</b>.</p>
+      <p class="small muted">${w.mode && w.mode !== 'cloud'
+        ? `Your own model looks at each one once, <b>on this computer</b>: free, and nothing leaves it. How long depends on your GPU — try 50 first to see.`
+        : `Muse looks at each one once: about <b>$${w.dollars.toFixed(2)}</b> and <b>${Math.max(1, Math.round(w.minutes))} min</b>.`}</p>
       <div class="chips" style="margin-top:12px"><button class="btn primary" id="look">${ic('sparkle')}Let Muse look</button>
       ${w.items > 50 ? `<button class="btn" id="look50">Try 50 first</button>` : ''}</div>`;
   } else if (st.state === 'ready' && st.unreadable) {
@@ -433,7 +447,7 @@ afterRender[''] = () => {
     const request = $('#makeq').value.trim();
     if (!request) return $('#makeq').focus();
     try { const {id} = await api('/api/films', {request, ask: true}); location.hash = `#/film/${id}`; }
-    catch (err) { toast(err.message); }
+    catch (err) { filmError(err); }
   };
   $$('[data-watch]').forEach(a => a.onclick = e => { e.preventDefault(); $('#watch').scrollIntoView({behavior: 'smooth'}); $('#fv')?.play().catch(() => {}); });
   const v = $('#fv');
@@ -1263,7 +1277,7 @@ afterRender.films = async () => {
     const request = $('#freq').value.trim(); if (!request) return $('#freq').focus();
     $('#fmake').disabled = true;
     try { const {id} = await api('/api/films', {request, template: $('#ftpl').value || null, ask: $('#fask').checked}); location.hash = `#/film/${id}`; }
-    catch (e) { toast(e.message); $('#fmake').disabled = false; }
+    catch (e) { filmError(e); $('#fmake').disabled = false; }
   };
   const reqs = await api('/api/blessing_requests');
   $('#blist').innerHTML = reqs.length ? reqs.map(r => {
@@ -1360,7 +1374,7 @@ function renderFilm(st) {
     if (ag) {
       ag.disabled = true;
       try { const {id} = await api(`/api/films/${enc(ag.dataset.again)}/again`, {}); location.hash = `#/film/${id}`; }
-      catch (err) { ag.disabled = false; toast(err.message); }
+      catch (err) { ag.disabled = false; filmError(err); }
       return;
     }
     const qb = e.target.closest('button[data-q]');
